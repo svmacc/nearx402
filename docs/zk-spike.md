@@ -86,7 +86,7 @@ All run through the real host functions in the sandbox. The counter of accepted 
 
 ## Gate decision
 
-| Criterion (handoff section 11) | Result |
+| Criterion | Result |
 | --- | --- |
 | Valid and invalid proofs are told apart in the sandbox | **Pass** |
 | Gas fits the limit | **Pass**, 35.26 of 300 Tgas |

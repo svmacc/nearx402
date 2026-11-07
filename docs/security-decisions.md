@@ -22,17 +22,17 @@ Each entry records what we chose, why, and which test enforces it. **Accepted** 
 
 ## SD-001: Scope is A + C, D is a stretch goal
 
-Steven accepted the review's findings and the proposed order on 6 Nov 2026. Option A and Option C are the 12 Nov target. If the verifier spike or the policy circuit fails its gate, the submission locks to Option A. Option D stays the long-term ambition, but it does not enter `main` until every question in handoff section 9 has an answer. This is a scheduling decision, not a rejection of D.
+Steven accepted an external design review's findings and its proposed order on 6 Nov 2026. Option A and Option C are the 12 Nov target. If the verifier spike or the policy circuit fails its gate, the submission locks to Option A. Option D stays the long-term ambition, but it does not enter `main` until its open design questions have answers. This is a scheduling decision, not a rejection of D.
 
 ## SD-002: The contract derives or checks every proof input
 
-An agent-chosen `day` could reset the daily cap (handoff 6.1), so `day`, `vendor`, `amount`, `invoice`, and `context` are computed by the contract from block time and from the same arguments it acts on. `policy_commitment` and `old_state` come from storage. Only `new_state` comes from the agent, and the proof constrains it. All field elements must be canonical. The binding table is in [threat-model.md](threat-model.md#5-proof-bindings-for-option-c).
+An agent-chosen `day` could reset the daily cap, so `day`, `vendor`, `amount`, `invoice`, and `context` are computed by the contract from block time and from the same arguments it acts on. `policy_commitment` and `old_state` come from storage. Only `new_state` comes from the agent, and the proof constrains it. All field elements must be canonical. The binding table is in [threat-model.md](threat-model.md#5-proof-bindings-for-option-c).
 
 **Enforced by:** `proof_for_a_fabricated_future_day_does_not_reset_the_cap` and its sandbox equivalent (step 7), `real_proof_binds_every_public_input`, and the mutants that hand each input to the agent ([zk-policy.md](zk-policy.md)).
 
 ## SD-003: One proof statement binds vendor, amount, invoice, and state
 
-Allowlist membership must apply to the account that actually receives the transfer (handoff 6.2). Under Option C the transfer target and the proved vendor are one contract argument, hashed by the contract. Option D needs a stronger recipient binding, which is covered by SD-010.
+Allowlist membership must apply to the account that actually receives the transfer. Under Option C the transfer target and the proved vendor are one contract argument, hashed by the contract. Option D needs a stronger recipient binding, which is covered by SD-010.
 
 **Enforced by:** `allowlisted_path_cannot_be_reused_for_another_vendor`, `proof_for_one_vendor_cannot_pay_another`, `proof_for_one_amount_cannot_transfer_another`, and sandbox steps 4 and 5.
 
@@ -61,7 +61,7 @@ If a callback runs out of gas, the lock would stick. `set_zk_agent` is the owner
 
 ## SD-006: Redemption store stays single-instance for the hackathon
 
-The current store is a mutex plus an fsync'd append-only file, which is atomic only within one process (handoff 6.4). The hackathon deployment runs exactly one facilitator instance, and the README must say so. Production needs a database with a unique key on `(policy, log_id)`.
+The current store is a mutex plus an fsync'd append-only file, which is atomic only within one process. The hackathon deployment runs exactly one facilitator instance, and the README must say so. Production needs a database with a unique key on `(policy, log_id)`.
 
 **Enforced by:** concurrent-redemption sandbox test, step 3c.
 
@@ -73,7 +73,7 @@ The setup must not run where the agent can see it: an agent holding that randomn
 
 ## SD-008: Replace the hand-written HMAC
 
-`hmac_sha256` at `crates/nearx402/src/vendor.rs:174` is hand-written over `sha2`, and the handoff forbids custom primitives. It passes the RFC 4231 test vector, so this is a policy fix rather than a known bug. The replacement uses `hmac::Hmac<Sha256>` and its `verify_truncated_left` for constant-time comparison. Adding the crate needs dependency approval.
+`hmac_sha256` at `crates/nearx402/src/vendor.rs:174` is hand-written over `sha2`, and the external design review forbids custom primitives. It passes the RFC 4231 test vector, so this is a policy fix rather than a known bug. The replacement uses `hmac::Hmac<Sha256>` and its `verify_truncated_left` for constant-time comparison. Adding the crate needs dependency approval.
 
 ## SD-009: Original implementation
 

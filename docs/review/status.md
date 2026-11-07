@@ -12,6 +12,7 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 | `scripts/demo.sh` from that clone | Exit 0. $0.90 paid, $0.00 to the attacker |
 | `scripts/demo-zk.sh` from that clone | Exit 0. 0.05 mUSDC paid, 0.00 to the attacker |
 | Policy code hash of that build | `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`, the same as on testnet |
+| Token code hash, local build compared with testnet | `HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g` on both |
 | Both demos with only loopback available (`unshare -rn`, offline cargo) | Exit 0. An outside host was confirmed unreachable first |
 | Other product and chain names in all commits, messages and paths | 0 matches. `LICENSE` names the SVM team as holder, as Steven chose |
 | Package sources in `Cargo.lock` | 514 from crates.io. No git dependencies, and path dependencies only inside this repo |
@@ -23,7 +24,6 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 - The offline run used dependencies already on this machine. A first build needs crates.io, and `near-sandbox` downloads its binary from NEAR's build server.
 - Testnet mode needs a NEAR RPC by design. "Runs alone" means it depends on no other product, not that it needs no network.
 - That no code was reused from the team's other products rests on a text search and on Steven's confirmation. It is not a full provenance audit.
-- Only the policy contract's hash was compared with testnet, not the token's.
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 

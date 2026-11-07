@@ -82,8 +82,8 @@ Implemented in `crates/zx402-zk/src/policy.rs` and `contracts/policy/src/lib.rs`
 | `policy_commitment` | `Poseidon(cap, per_call, allowlist_root, salt)` | Contract storage, set by finance | Agent substitutes its own policy |
 | `old_state` | `Poseidon(day, spent, salt)` | Contract storage | Rollback, forked state |
 | `new_state` | `Poseidon(day', spent', salt')` | Agent, constrained by the proof, checked canonical | Arbitrary budget reset |
-| `day` | UTC day from block timestamp | Contract computes | Fabricated day (handoff 6.1) |
-| `vendor` | `H(account id)` of the actual `ft_transfer` receiver | Contract computes from the same argument it transfers to | Allowlisted vendor differs from the paid one (handoff 6.2) |
+| `day` | UTC day from block timestamp | Contract computes | Fabricated day |
+| `vendor` | `H(account id)` of the actual `ft_transfer` receiver | Contract computes from the same argument it transfers to | Allowlisted vendor differs from the paid one |
 | `amount` | Actual `ft_transfer` amount | Contract uses the same argument | Proof for one amount, transfer of another |
 | `invoice` | `H(nonce)` | Contract computes from the memo it records | Proof reused for another invoice |
 
@@ -136,9 +136,9 @@ These are three different results. Only the second feeds the circuit breaker.
 - **A forced attempt is public.** The rejected transaction's arguments show the vendor and amount that were tried. Only the rule it broke stays hidden, since the log says just `invalid proof`.
 - **An honest refusal leaves no trace**, which is good for privacy and bad for audit: finance cannot see from the chain that an agent was prompted to pay someone off-policy.
 
-## 7. Handoff test matrix: current coverage
+## 7. Attack test matrix: current coverage
 
-| Handoff test | Status |
+| Attack test | Status |
 | --- | --- |
 | Injected payment to unapproved address | Covered (T1) |
 | Amount above per-call | Covered (T2) |
