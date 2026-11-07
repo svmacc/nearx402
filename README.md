@@ -195,9 +195,9 @@ scripts/build-contracts.sh
 cargo test --workspace
 ```
 
-152 tests pass as of 7 Nov 2026. They cover:
+160 tests pass as of 7 Nov 2026. They cover:
 - 73 unit tests for the policy contract (including the circuit breaker, `sync_balance`, and `pay_zk` with real proofs) and 2 for the token.
-- 26 tests in `crates/nearx402` for x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, and the facilitator's local checks and `ft_transfer` event matching.
+- 27 tests in `crates/nearx402` for x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, and the facilitator's local checks and `ft_transfer` event matching.
 - One sandbox end-to-end test of the public-limits flow. It runs the real contracts, vendor, facilitator and agent, and covers:
   - replay, a fake contract, a nonce from another resource, and double settlement;
   - 16 simultaneous redemptions of one payment, of which exactly one is served;
@@ -208,7 +208,7 @@ cargo test --workspace
   - a forged callback, and the agent key's restrictions.
 
   Starting the sandbox takes about 20 s.
-- 39 tests for the ZK circuits and the wallet file, including statements a cheating agent would try.
+- 46 tests for the ZK circuits and the wallet file, including statements a cheating agent would try.
 - Sandbox tests of the private mode:
   - `zk_policy`: `402 → prove → pay_zk → 200` and a compromised agent's attacks, including proofs with invalid coordinates;
   - `zk_double_spend`: two proofs from one state, sent together;
@@ -217,7 +217,7 @@ cargo test --workspace
   - `offer_selection` (5 tests): incompatible 402 offers, redirects, and a lost response, on both clients.
 - One sandbox test and one unit test for the Groth16 verifier spike.
 
-`scripts/mutation-audit.py` breaks one check at a time and confirms a test fails. Results and limits are in the [review status](docs/review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402). On 7 Nov: 90 mutants, 87 killed, 3 equivalent, 0 survived, over two runs. This shows the tests depend on the checks that exist. It does not show the circuit is sound.
+`scripts/mutation-audit.py` breaks one check at a time and confirms a test fails. Results and limits are in the [review status](docs/review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402). On 7 Nov: 90 mutants, 87 killed, 3 equivalent, 0 survived, over two runs, and then 7 more for how the wallet file is written, all killed in a targeted run. This shows the tests depend on the checks that exist. It does not show the circuit is sound.
 
 Run one facilitator instance only: its redemption store is atomic within a single process, not across instances ([SD-006](docs/security-decisions.md#sd-006-redemption-store-stays-single-instance-for-the-hackathon)).
 

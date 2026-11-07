@@ -92,7 +92,7 @@ The whole flow also includes the test's own balance and state reads between step
 
 `scripts/mutation-audit.py` breaks one check at a time and confirms a test fails. It now also covers the wallet file, the demo's deployment checks, the receipt secret, and offer selection. **On 7 Nov: 90 mutants, 87 killed, 3 equivalent, 0 survived, 0 timed out.**
 
-**Caveat.** These were two runs, not one. A full run of 86 had 1 mutant that failed to compile, and a targeted run of 12 covered it, 4 new mutants, and 7 others against stronger tests. Only tests changed between them. Details are in [the review status](review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402).
+**Caveat.** These were two runs, not one. A full run of 86 had 1 mutant that failed to compile, and a targeted run of 12 covered it, 4 new mutants, and 7 others against stronger tests. Only tests changed between them. 7 more mutants for how the wallet file is written came later, and all were killed in a targeted run, so the script now holds 97. Details are in [the review status](review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402).
 
 **What the first circuit audit's survivors taught us:**
 
