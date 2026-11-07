@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/policy",
+    "contracts/mock-usdc",
+    "contracts/zk-spike",
+    "crates/nearx402",
+    "crates/zx402-zk",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+near-sdk = "5.30"
+near-contract-standards = "5.30"
+
+# NEAR contracts need a small, panic-abort wasm build.
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+# Tests prove in the dev profile, which would be very slow unoptimized. These
+# crates never reach a contract wasm.
+[profile.dev.package.ark-ff]
+opt-level = 3
+[profile.dev.package.ark-ec]
+opt-level = 3
+[profile.dev.package.ark-bn254]
+opt-level = 3
+[profile.dev.package.ark-poly]
+opt-level = 3
+[profile.dev.package.ark-relations]
+opt-level = 3
+[profile.dev.package.ark-r1cs-std]
+opt-level = 3
+[profile.dev.package.ark-crypto-primitives]
+opt-level = 3
+# ark-groth16 asserts satisfiability only under debug assertions, and tests must
+# be able to prove false statements, as a cheating agent would.
+[profile.dev.package.ark-groth16]
+opt-level = 3
+debug-assertions = false
+
+# Off-chain proving: optimized for speed, not wasm size. Use with
+# `--profile prover` when measuring proof times.
+[profile.prover]
+inherits = "release"
+codegen-units = 16
+opt-level = 3
+lto = "thin"
+panic = "unwind"

@@ -1,0 +1,10 @@
+/target
+.env
+neardev/
+*.wasm
+redeemed.tsv
+redeemed.tmp
+# Setup output: the wallet file holds the private policy.
+.zx402/
+# Your real deployment; deploy/testnet.example.json is the template.
+deploy/testnet.json

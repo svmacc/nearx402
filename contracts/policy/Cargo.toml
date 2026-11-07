@@ -1,0 +1,20 @@
+[package]
+name = "policy"
+description = "Spend policy wallet for AI agents: caps, vendor allowlist, audit log, NEP-141 settlement"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }
+# Real proofs for the pay_zk tests. Dev only: nothing here reaches the wasm.
+ark-std = "0.5"
+base64 = "0.22"
+zx402-zk = { path = "../../crates/zx402-zk" }

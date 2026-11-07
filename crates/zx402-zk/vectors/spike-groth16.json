@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "expect": "true",
+      "inputs": "bmKMgOnNanBMPjRx587o+8Nx10PrccBKQ/jqIcT17QXFcBhwyYBHwtJNkXMBGoplixTDOndFaWGTJjk6c1OiK0311cLk4aKf42WCl0LFTzQIFq7Fenw5nENn75q3aiMd+/eBBDZ9c83xpnKa6xT/vTukybkk32wiDkgPXtDxryni97Hkx2/SMK78XpX/fkQnD4wEm5Mk1xKxz2FE+bQ/GM3kluxsPNpaLcZCOmS/ho7VVV/f7jeR74xjSbkMseId2a48VGF0tgKpdJdMDAj6f7xDOyBhQu/e7Zj+68OCEwbFTQ1FTZnpUso7Jp0EznADyMVvAonHFmUrpPRI0/53Iw==",
+      "name": "valid",
+      "proof": "crnTelSaV7yYKRxVH1i99hXMQbxXIJ742JcD5b20bQMje0eSJ4x7oOouXwst98Kky1QhULv/zxhCU6+D1BVcArflM5+A+JfvZiyiYzGUd3Ztp07KYHrh7jjaWr3QzxYPV4UHfHsxJP9NbzUVSyl5iFqGDaPIhheiCZbdXcjkSB7jJ4X4IJFc21sj+MZjOrLGUDwT8iIVzxGu7JBDPStLHbH8r2iytiiIET4ALF0KUI4BjvKt/CvHCDdD95Ta7Vgo8v1azhYg7I6otYxBBNqvptQfXssH9sB1fFnNynHSegXO4aEdXZ0cPg0YN/o/XosL+0mW8G50G1x/gRN0WqiOCw=="
+    },
+    {
+      "expect": "false",
+      "inputs": "bmKMgOnNanBMPjRx587o+8Nx10PrccBKQ/jqIcT17QVN9dXC5OGin+NlgpdCxU80CBauxXp8OZxDZ++at2ojHcVwGHDJgEfC0k2RcwEaimWLFMM6d0VpYZMmOTpzU6Ir+/eBBDZ9c83xpnKa6xT/vTukybkk32wiDkgPXtDxryni97Hkx2/SMK78XpX/fkQnD4wEm5Mk1xKxz2FE+bQ/GM3kluxsPNpaLcZCOmS/ho7VVV/f7jeR74xjSbkMseId2a48VGF0tgKpdJdMDAj6f7xDOyBhQu/e7Zj+68OCEwbFTQ1FTZnpUso7Jp0EznADyMVvAonHFmUrpPRI0/53Iw==",
+      "name": "public inputs swapped",
+      "proof": "crnTelSaV7yYKRxVH1i99hXMQbxXIJ742JcD5b20bQMje0eSJ4x7oOouXwst98Kky1QhULv/zxhCU6+D1BVcArflM5+A+JfvZiyiYzGUd3Ztp07KYHrh7jjaWr3QzxYPV4UHfHsxJP9NbzUVSyl5iFqGDaPIhheiCZbdXcjkSB7jJ4X4IJFc21sj+MZjOrLGUDwT8iIVzxGu7JBDPStLHbH8r2iytiiIET4ALF0KUI4BjvKt/CvHCDdD95Ta7Vgo8v1azhYg7I6otYxBBNqvptQfXssH9sB1fFnNynHSegXO4aEdXZ0cPg0YN/o/XosL+0mW8G50G1x/gRN0WqiOCw=="
+    },
+    {
+      "expect": "host function error",
+      "inputs": "bmKMgOnNanBMPjRx587o+8Nx10PrccBKQ/jqIcT17QXFcBhwyYBHwtJNkXMBGoplixTDOndFaWGTJjk6c1OiK0311cLk4aKf42WCl0LFTzQIFq7Fenw5nENn75q3aiMd+/eBBDZ9c83xpnKa6xT/vTukybkk32wiDkgPXtDxryni97Hkx2/SMK78XpX/fkQnD4wEm5Mk1xKxz2FE+bQ/GM3kluxsPNpaLcZCOmS/ho7VVV/f7jeR74xjSbkMseId2a48VGF0tgKpdJdMDAj6f7xDOyBhQu/e7Zj+68OCEwbFTQ1FTZnpUso7Jp0EznADyMVvAonHFmUrpPRI0/53Iw==",
+      "name": "byte flipped in A",
+      "proof": "crnTelSbV7yYKRxVH1i99hXMQbxXIJ742JcD5b20bQMje0eSJ4x7oOouXwst98Kky1QhULv/zxhCU6+D1BVcArflM5+A+JfvZiyiYzGUd3Ztp07KYHrh7jjaWr3QzxYPV4UHfHsxJP9NbzUVSyl5iFqGDaPIhheiCZbdXcjkSB7jJ4X4IJFc21sj+MZjOrLGUDwT8iIVzxGu7JBDPStLHbH8r2iytiiIET4ALF0KUI4BjvKt/CvHCDdD95Ta7Vgo8v1azhYg7I6otYxBBNqvptQfXssH9sB1fFnNynHSegXO4aEdXZ0cPg0YN/o/XosL+0mW8G50G1x/gRN0WqiOCw=="
+    }
+  ],
+  "circuit": {
+    "rounds": 8,
+    "seeds": {
+      "instance": 11,
+      "proof": 13,
+      "setup": 7
+    }
+  },
+  "encoding": "Field elements 32 bytes little-endian; G1 x||y; G2 x.c0||x.c1||y.c0||y.c1; proof A||B||C; base64",
+  "verifying_key": {
+    "alpha": "rfFgkl+5bLjoEYBOzoYeXyb8dDxnhUrIWVHTPPHE+SxiEEqrBOoDVJzj06obTOMUnycbsYAdRmFwdeQoM1djKw==",
+    "ic": "dxSUlkiuEjTXHQIX+74Sq7IKuR6Du5w1rNwDyFe0RhxdCU2i09nAYuBsKOT56NS+XAFYEtl5ZtsYvblJjhOqCAJGOEAZQPcWx+bJvOS4ZDHPPTL5PtDY9wLaGZljSpsVq0ClgNaBIHjHbkj8wLZkmmPUsR+AhlbpYBK/jtKIMyyKb3jzK8CwIvBmuPTVPS4ahiw193emEI0zDz4P4guIGJh5wTiEwV5cjqcFJReiyxXEhzGZchB9aEUYyvKngRMoViONhHy7t2Z2iFiD9vP45sR8I5QqwOB5Bn1lUxESKRlAo9YtkhqJaNJpX7xGonvoN02pmfBcx64tP2DHzllHASSfxjwxAg2guoDOQYoi5MOWPP7Bm5qjhDk2qcZV3GwgnS2wrU7icWT6oh9zEHkDoWaURogXclojJk+lcOpk9iYCsejheHv+lX2QAPvIaFiSJTYMiaDBOJHb0cv/IEX1HakB2l3/8NQu9rELF50zboL5N286sjDnP6v/Z76hBXkXT4NcThavo+psxButdH3aYSzTVIblhCR746X+aNjGXQU4V/ad57XntM2ob+uxXWLgnswEy08PhIboOh+UXEmCJ9u+tf8wsi2UirvOWZY6vXteXPe299vbpcZQjWvaNxQFE5ZIKn3r/qOxrhKYAKaz3XNLpfC2EHn3fRGag5ljoyMSAM6PAdXYEsWa1jCiCXsz5k+bzf3zRqmZNpoJb11eDVtXVgfozZMf9czekz0s6QnJ9iKbytO7msY9H6Vjk7si",
+    "neg_beta": "KT1pk/e0bHY6QiieY2daHDvpdIvSulESD82Kz9ueqw45nGQ0NJEbZu22GHq8mgS2wy1xqyq59cv4ixe7bf0wFQdTCoHh2v+4FWqR/BNxU509sQtXaE9M1ADg5j6NLU4IaNHZqPO0KZ+WV5qGfM9BQqmX4PAo/4f2hwKesODSQCM=",
+    "neg_delta": "u9RMvAOajPuUKqusIjBqtZ0LAYq5j6yy0QhDEmeLiASuPYUBKZFLGHjiibuaH3b4JUAVWCqoHgEoM1a7JrQfKqaSSHAYNa7vQZ6VTFU1fOzGQpf7uodXpw29LhN7JKkn0MMn4/JDGMSSzrPZTVXlsisZWemcusd2F/kDLDUOyyo=",
+    "neg_gamma": "XZxc25oPHzpLW2peodEpaZk0cpSUe54f3OKk+epJERVgtJLX5GBUv3TcMnJtvp4wSUkPggcRtcVLa+NaeIFhAX3Y6/tgRkMywYQSuhwWDYicJoMQ4cOspq57Xa1ybmYODjOoL454Q/NtnZVMoPeTPoB8eMQmwMfaYICf2WaTgxY="
+  },
+  "warning": "Keys come from a public seed and offer NO security. For format testing only."
+}

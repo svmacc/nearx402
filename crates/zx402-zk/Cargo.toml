@@ -1,0 +1,31 @@
+[package]
+name = "zx402-zk"
+description = "Groth16 spike for zx402: circuit, proving, and NEAR alt_bn128 byte encoding. Keys here are not secure."
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow = "1"
+ark-bn254 = "0.5"
+ark-crypto-primitives = { version = "0.5", default-features = false, features = ["r1cs", "sponge"] }
+ark-ec = "0.5"
+ark-ff = "0.5"
+ark-groth16 = "0.5"
+ark-r1cs-std = "0.5"
+ark-relations = "0.5"
+ark-serialize = "0.5"
+ark-snark = "0.5"
+ark-std = "0.5"
+base64 = "0.22"
+rand = "0.8"
+rand_chacha = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+near-api = "0.8"
+near-sandbox = "0.4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

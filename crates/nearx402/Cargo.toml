@@ -1,0 +1,24 @@
+[package]
+name = "nearx402"
+description = "x402 agent client, vendor server and sandbox demo for the nearx402 spend policy"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow = "1"
+ark-std = "0.5"
+axum = "0.8"
+base64 = "0.22"
+bs58 = "0.5"
+clap = { version = "4", features = ["derive", "env"] }
+near-api = "0.8"
+near-sandbox = "0.4"
+rand = "0.9"
+reqwest = { version = "0.13", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+zx402-zk = { path = "../zx402-zk" }

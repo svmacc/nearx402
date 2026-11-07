@@ -1,0 +1,13 @@
+{
+  "rpc_url": "https://rpc.testnet.near.org",
+  "network_name": "near-testnet",
+  "policy": "nearx402-policy.testnet",
+  "token": "nearx402-musdc.testnet",
+  "agent": "nearx402-agent.testnet",
+  "agent_key_file": "~/.near-credentials/testnet/nearx402-agent.testnet/REPLACE_WITH_THE_LIMITED_KEY.json",
+  "vendor": "nearx402-data.testnet",
+  "outside_recipient": "nearx402-outside.testnet",
+  "agent_dir": ".zx402/testnet/agent",
+  "policy_wasm": "res/policy.wasm",
+  "explorer_tx_url": "https://testnet.nearblocks.io/txns/{hash}"
+}

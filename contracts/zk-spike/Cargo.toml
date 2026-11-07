@@ -1,0 +1,13 @@
+[package]
+name = "zk-spike"
+description = "Spike: Groth16 verification through NEAR alt_bn128 host functions. Not for production."
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
