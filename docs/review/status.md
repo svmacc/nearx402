@@ -27,9 +27,24 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 
-## Testnet demo: one run, for Codex's verification (7 Nov 2026)
+## Testnet demo: one run, verified by Codex within stated limits (7 Nov 2026)
 
-**Status: run by Claude and read back from the chain by a separate script. Codex has not verified it.** Steven approved deleting the agent's full-access key. Hashes are in [docs/testnet.md](../testnet.md). Commit `1520c3e`, `demo-zk` exit 0.
+**Status: Codex verified the on-chain results through RPC at `6d5d27a`, and read the recorded HTTP output. This is not a live rerun of the HTTP flow, not chain evidence for HTTP, and not a completed cryptographic audit.** Claude ran the demo at commit `1520c3e`, with `demo-zk` exit 0, after Steven approved deleting the agent's full-access key. Hashes are in [docs/testnet.md](../testnet.md).
+
+| Codex's check | Result |
+| --- | --- |
+| The key deletion and the three demo transactions | All `FINAL`, with 0 failed receipts |
+| Payment | Signed by `HNf59...PnKY`. `zk_proof_verified`, NEP-141 `ft_transfer` from the policy to the vendor for 50000, log #0 `Paid` |
+| Attempts A and B | Same key. `Blocked`, `invalid proof`, log #1 and #2, no `ft_transfer` |
+| Agent's keys at final, block 276651711 | Only `HNf59...PnKY`, `FunctionCall`, `pay_zk` on the policy, allowance 988730501197369500000000 |
+| `ft_balance_of` | Finance 10000000, policy 9950000, vendor 50000, outside recipient 0, agent 0 |
+| Raw output of the run | Exit 0, hashes match, HTTP 200, observer 402, replay 402 |
+
+**Codex's small finding, fixed afterward:** the mock market data still quoted another chain's ticker, which does not fit the NEAR-only story, and did not say its prices were not live. The fixture now quotes NEAR and BTC and is labelled synthetic. The recorded run's output and earlier commits keep the old body, because they are evidence and history. The NEAR-only audit above searched for names and missed this ticker.
+
+Evidence for the fixture change, on a sandbox only, with no new testnet run: 161 tests pass, clippy and fmt are clean, `scripts/demo.sh` and `scripts/demo-zk.sh` exit 0, and both code hashes are unchanged. Codex has not reviewed this change. Also for review: the [demo script](../demo-script.md), and a proposal for [recovering `reserved`](../reserved-recovery.md), which changes no code.
+
+Claude's own checks, before Codex's:
 
 | Check | Result |
 | --- | --- |

@@ -289,9 +289,14 @@ pub fn market_data_vendor(account_id: AccountId) -> Vendor {
         account_id,
         products: vec![Product {
             name: "market-data".into(),
-            description: "Spot prices for NEAR, SOL and BTC".into(),
+            description: "Synthetic sample prices for NEAR and BTC, not live market data".into(),
             price: 50_000,
-            body: json!({ "NEAR": 5.12, "SOL": 182.4, "BTC": 98250.0, "source": "data-api" }),
+            body: json!({
+                "NEAR": 5.12,
+                "BTC": 98250.0,
+                "source": "data-api",
+                "note": "synthetic sample, not live prices",
+            }),
         }],
     }
 }
@@ -335,6 +340,23 @@ pub fn demo_vendors(root: &AccountId) -> Vec<Vendor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn market_data_is_labelled_as_a_sample_of_near_and_btc() {
+        let vendor = market_data_vendor("data-api.testnet".parse().unwrap());
+        let product = &vendor.products[0];
+        assert!(product.description.contains("not live"));
+        assert_eq!(product.body["note"], "synthetic sample, not live prices");
+        let mut fields: Vec<&str> = product
+            .body
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        fields.sort_unstable();
+        assert_eq!(fields, ["BTC", "NEAR", "note", "source"]);
+    }
 
     #[test]
     fn hmac_matches_rfc_4231_test_case_2() {

@@ -192,7 +192,7 @@ Known limits (from our own reviews; there is no third-party audit). More are in 
 | `crates/zx402-zk` | The policy circuit, the agent's prover and wallet file, and NEAR byte encoding. Binary `zk-bench` |
 | `contracts/zk-spike` | Groth16 verifier spike through NEAR `alt_bn128` host functions. It enforces no spending rule, and its keys offer no security. See [docs/zk-spike.md](docs/zk-spike.md) |
 | `deploy/` | Template for the configuration `demo-zk --network testnet` reads |
-| `docs/` | [Threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), [ZK policy](docs/zk-policy.md), [testnet plan](docs/testnet.md), [review status](docs/review/status.md) |
+| `docs/` | [Threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), [ZK policy](docs/zk-policy.md), [testnet plan](docs/testnet.md), [review status](docs/review/status.md), [demo script](docs/demo-script.md), [`reserved` recovery proposal](docs/reserved-recovery.md) |
 | `dashboard/index.html` | Finance dashboard: balance, spend vs cap, approved vendors, audit log, CSV export. Reads the contract over RPC. Works against testnet with `?policy=<id>&rpc=<url>` |
 | `scripts/` | `build-contracts.sh`, `demo.sh`, `demo-zk.sh`, `mutation-audit.py` |
 
@@ -205,9 +205,9 @@ scripts/build-contracts.sh
 cargo test --workspace
 ```
 
-160 tests pass as of 7 Nov 2026. They cover:
+161 tests pass as of 7 Nov 2026. They cover:
 - 73 unit tests for the policy contract (including the circuit breaker, `sync_balance`, and `pay_zk` with real proofs) and 2 for the token.
-- 27 tests in `crates/nearx402` for x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, and the facilitator's local checks and `ft_transfer` event matching.
+- 28 tests in `crates/nearx402` for x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
 - One sandbox end-to-end test of the public-limits flow. It runs the real contracts, vendor, facilitator and agent, and covers:
   - replay, a fake contract, a nonce from another resource, and double settlement;
   - 16 simultaneous redemptions of one payment, of which exactly one is served;
