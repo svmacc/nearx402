@@ -903,3 +903,124 @@ fn a_zk_agent_cannot_also_get_a_public_budget() {
     at(owner(), DAY);
     f.c.set_agent(agent(), U128(CAP), U128(PER_CALL), None);
 }
+
+impl Fix {
+    /// Finance says the tokens of entry `id` moved.
+    fn reconcile_moved(&mut self, id: u32, day: u64) {
+        at(owner(), day);
+        self.c.reconcile_payment(id, true);
+    }
+
+    /// Finance says the tokens of entry `id` did not move, and the token agrees.
+    fn reconcile_unmoved(&mut self, id: u32, day: u64) {
+        at(owner(), day);
+        let seq = self.c.settle_seq;
+        self.c.reconcile_payment(id, false);
+        let held = U128(self.c.balance + self.c.reserved);
+        testing_env!(
+            VMContextBuilder::new()
+                .current_account_id(contract_id())
+                .predecessor_account_id(contract_id())
+                .block_timestamp(day * NANOS_PER_DAY)
+                .prepaid_gas(Gas::from_tgas(100))
+                .build(),
+            near_sdk::test_vm_config(),
+            near_sdk::RuntimeFeesConfig::test(),
+            Default::default(),
+            vec![PromiseResult::Successful(
+                near_sdk::serde_json::to_vec(&held).unwrap()
+            )]
+        );
+        self.c.on_reconcile_unmoved(id, seq);
+    }
+}
+
+#[test]
+fn reconcile_of_moved_tokens_frees_the_agent_and_keeps_its_state() {
+    let mut f = fix();
+    let call = f.prove(VENDOR, 100_000, "n", DAY);
+    f.send(&call, DAY);
+    // The callback never runs, so the agent cannot pay.
+    assert_eq!(f.view().pending_log_id, Some(0));
+
+    f.reconcile_moved(0, DAY + 1);
+
+    assert_eq!(f.view().pending_log_id, None);
+    assert!(f.state_is(call.new_state));
+    assert_eq!(f.balance(), FUNDS - 100_000);
+    assert_eq!(f.c.reserved, 0);
+    f.w.state = call.next;
+    f.pay_ok(VENDOR, 100_000, DAY + 1);
+}
+
+#[test]
+fn reconcile_of_unmoved_tokens_returns_funds_without_rolling_the_state_back() {
+    let mut f = fix();
+    let call = f.prove(VENDOR, 100_000, "n", DAY);
+    f.send(&call, DAY);
+
+    f.reconcile_unmoved(0, DAY + 1);
+
+    assert_eq!(f.view().pending_log_id, None);
+    assert!(
+        f.state_is(call.new_state),
+        "a claim must not refund the budget"
+    );
+    assert_eq!(f.balance(), FUNDS);
+    assert_eq!(f.c.reserved, 0);
+    f.w.state = call.next;
+    f.pay_ok(VENDOR, 100_000, DAY + 1);
+}
+
+#[test]
+fn reconcile_leaves_a_rotated_agent_alone() {
+    for moved in [true, false] {
+        let mut f = fix();
+        let call = f.prove(VENDOR, 100_000, "n", DAY);
+        f.send(&call, DAY);
+        let replacement = SpendState::fresh(&mut f.rng);
+        at(owner(), DAY);
+        f.c.set_zk_agent(
+            agent(),
+            bytes(f.w.opening.commitment().unwrap()),
+            bytes(replacement.commitment()),
+            None,
+        );
+        if moved {
+            f.reconcile_moved(0, DAY + 1);
+        } else {
+            f.reconcile_unmoved(0, DAY + 1);
+        }
+        assert!(f.state_is(replacement.commitment()));
+        assert_eq!(f.c.reserved, 0);
+    }
+}
+
+#[test]
+fn reconcile_does_not_disturb_a_newer_payment() {
+    for moved in [true, false] {
+        let mut f = fix();
+        let first = f.prove(VENDOR, 100_000, "n1", DAY);
+        f.send(&first, DAY);
+
+        f.w.state = SpendState::fresh(&mut f.rng);
+        at(owner(), DAY);
+        f.c.set_zk_agent(
+            agent(),
+            bytes(f.w.opening.commitment().unwrap()),
+            bytes(f.w.state.commitment()),
+            None,
+        );
+        let second = f.prove(VENDOR, 100_000, "n2", DAY);
+        f.send(&second, DAY);
+
+        if moved {
+            f.reconcile_moved(0, DAY + 1);
+        } else {
+            f.reconcile_unmoved(0, DAY + 1);
+        }
+        assert!(f.state_is(second.new_state));
+        assert_eq!(f.view().pending_log_id, Some(1), "the newer marker stays");
+        assert_eq!(f.c.reserved, 100_000);
+    }
+}

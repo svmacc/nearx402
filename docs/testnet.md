@@ -1,11 +1,15 @@
 # Testnet plan
 
-Status: 7 Nov 2026. **The demo ran once on testnet and its checks passed.** The contract is not locked, and the vendor and facilitator ran on a local machine talking to testnet. Read from the chain at final with view calls:
+Status: 7 Nov 2026. **The demo ran once on testnet and its checks passed, on the build below.** The contract is not locked, and the vendor and facilitator ran on a local machine talking to testnet.
+
+**The source is now ahead of testnet.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH`. So `demo-zk` refuses to run against testnet until the redeploy described under [Next steps](#next-steps).
+
+Read from the chain at final with view calls:
 
 | Item | State on testnet |
 | --- | --- |
 | Accounts | All six exist. The agent has one limited key, listed below. The other five each have one full-access key |
-| `nearx402-policy.testnet` | Deployed and initialised, code hash `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`, the same as the local build. Owner `nearx402-finance.testnet`, token `nearx402-musdc.testnet`. **Not locked** |
+| `nearx402-policy.testnet` | Deployed and initialised, code hash `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`, the build of commit `32b3be4`, without `reconcile_payment`. Owner `nearx402-finance.testnet`, token `nearx402-musdc.testnet`. **Not locked** |
 | `nearx402-musdc.testnet` | Deployed, code hash `HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g`. Total supply 20.00 mUSDC |
 | Wallet and log | Policy holds 9.95 mUSDC, finance 10.00, the vendor 0.05, the outside recipient 0. Log: one paid entry, two blocked |
 | Private policy | Verifying key and ZK agent are on chain. Breaker 2 of 5 on 7 Nov UTC, not frozen. The values stay in `.zx402/testnet`, which git ignores |
@@ -33,7 +37,25 @@ Setup transactions, each `FINAL` with no failed receipt:
 | Add the limited key | agent | `41pFmNZPPd1aBsLDhmkiU2NnWrTfCoVuqWaMu2Dhs54o` |
 | Delete the full-access key | agent | `99fRG77vFks3SakUPvwk3t9mqpZqw3Y6QwVx2Qe4gdFY` |
 
-Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Done so far: steps 1 to 9. **Still to do: step 10, the locking decision.** Pushing and any further transaction wait for Steven's approval.
+Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Done so far: steps 1 to 9, on the earlier build. Pushing and any further transaction wait for Steven's approval.
+
+## Next steps
+
+Steven chose to add `reconcile_payment`, and then to lock. In this order, each with its own approval:
+
+| # | Step | Why here |
+| --- | --- | --- |
+| 1 | Codex reviews `reconcile_payment` | The contract cannot be fixed after locking |
+| 2 | Redeploy the policy in place, then read the state back | Keeps the verifying key, agent, log and funds. The old build can still be restored at this point |
+| 3 | Run the demo on the new build | Evidence for the code that will be locked. Each run uses 2 of the day's 5 blocked attempts |
+| 4 | Record the video | Before locking, so a problem found on camera can still be fixed |
+| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys |
+
+```bash
+near contract deploy nearx402-policy.testnet use-file res/policy.wasm without-init-call network-config testnet sign-with-legacy-keychain send
+```
+
+Do not pass an init call: it would fail on an initialised contract, and the state must stay.
 
 Finance's setup and the agent's wallet are on one machine for this demo, so step 6's warning about who ran the setup is not met here.
 

@@ -24,6 +24,7 @@ CIRCUIT = ROOT / "crates/zx402-zk/src/policy.rs"
 CONTRACT = ROOT / "contracts/policy/src/lib.rs"
 CIRCUIT_TEST = ["cargo", "test", "-p", "zx402-zk", "--lib", "policy"]
 CONTRACT_TEST = ["cargo", "test", "-p", "policy", "--lib", "zk_tests"]
+RECONCILE_TEST = ["cargo", "test", "-p", "policy", "--lib", "reconcile"]
 STORE = ROOT / "crates/zx402-zk/src/store.rs"
 STORE_TEST = ["cargo", "test", "-p", "zx402-zk", "--lib", "store"]
 DEPLOYMENT = ROOT / "crates/nearx402/src/deployment.rs"
@@ -81,6 +82,10 @@ def circuit(name, *edits):
 
 def contract(name, *edits):
     return name, CONTRACT, CONTRACT_TEST, list(edits)
+
+
+def reconcile(name, *edits):
+    return "reconcile: " + name, CONTRACT, RECONCILE_TEST, list(edits)
 
 
 def store(name, *edits):
@@ -176,6 +181,67 @@ MUTANTS = [
              ("ic: Base64VecU8,\n    ) {\n        self.assert_owner();", "ic: Base64VecU8,\n    ) {")),
     contract("verifying key view swaps a field",
              ("neg_beta: vk.neg_beta.clone().into(),", "neg_beta: vk.neg_gamma.clone().into(),")),
+
+    reconcile("owner check gone",
+              ("tokens_moved: bool) -> PromiseOrValue<PayOutcome> {\n        self.assert_owner();\n",
+               "tokens_moved: bool) -> PromiseOrValue<PayOutcome> {\n")),
+    reconcile("claim skips the pending check",
+              ('require!(entry.status == Status::Pending, "payment is not pending");\n'
+               "        require!(\n            env::block_timestamp()",
+               "require!(\n            env::block_timestamp()")),
+    reconcile("no age limit", always("env::block_timestamp().saturating_sub(entry.timestamp) >= RECONCILE_AFTER,")),
+    reconcile("age limit one early", (">= RECONCILE_AFTER,", "+ 1 >= RECONCILE_AFTER,")),
+    reconcile("age limit one late", ("entry.timestamp) >= RECONCILE_AFTER", "entry.timestamp) > RECONCILE_AFTER")),
+    reconcile("age limit shorter", ("const RECONCILE_AFTER: u64 = NANOS_PER_DAY;", "const RECONCILE_AFTER: u64 = NANOS_PER_DAY / 2;")),
+    reconcile("unmoved claim skips the read",
+              ("if tokens_moved {\n            return PromiseOrValue::Value", "if true {\n            return PromiseOrValue::Value")),
+    reconcile("callback skips the pending check",
+              ('require!(entry.status == Status::Pending, "payment is not pending");\n'
+               "        require!(\n            seq == self.settle_seq,",
+               "require!(\n            seq == self.settle_seq,")),
+    reconcile("callback ignores a transfer that resolved", always("seq == self.settle_seq,")),
+    reconcile("token balance not compared", always("held.0 >= self.balance + self.reserved,")),
+    reconcile("token balance ignores what is reserved",
+              ("held.0 >= self.balance + self.reserved,", "held.0 + self.reserved >= self.balance + self.reserved,")),
+    reconcile("token balance must exceed what is counted",
+              ("held.0 >= self.balance + self.reserved,", "held.0 > self.balance + self.reserved,")),
+    reconcile("failed read accepted",
+              ('.unwrap_or_else(|| env::panic_str("could not read token balance"));', ".unwrap_or(U128(u128::MAX));")),
+    reconcile("statuses swapped",
+              ("entry.status = if tokens_moved {\n            Status::Paid\n        } else {\n            Status::Failed\n",
+               "entry.status = if tokens_moved {\n            Status::Failed\n        } else {\n            Status::Paid\n")),
+    reconcile("moved claim not labelled", ('"reconciled by the owner: tokens moved"', '"tokens moved"')),
+    reconcile("unmoved claim not labelled", ('"reconciled by the owner: tokens did not move"', '"tokens did not move"')),
+    reconcile("reservation not dropped",
+              ("self.reserved -= entry.amount.0;\n        self.settle_seq += 1;\n        if !tokens_moved {",
+               "self.settle_seq += 1;\n        if !tokens_moved {")),
+    reconcile("settle_seq not bumped",
+              ("self.reserved -= entry.amount.0;\n        self.settle_seq += 1;\n        if !tokens_moved {",
+               "self.reserved -= entry.amount.0;\n        if !tokens_moved {")),
+    reconcile("funds not returned",
+              ("if !tokens_moved {\n            self.balance += entry.amount.0;\n        }\n", "")),
+    reconcile("funds returned on a moved claim",
+              ("if !tokens_moved {\n            self.balance += entry.amount.0;", "if true {\n            self.balance += entry.amount.0;")),
+    reconcile("budget refunded on an unmoved claim",
+              ("if !tokens_moved {\n            self.balance += entry.amount.0;\n",
+               "if !tokens_moved {\n            self.balance += entry.amount.0;\n"
+               "            if let Some(state) = self.agents.get_mut(&entry.agent_id) {\n"
+               "                state.spent_today = 0;\n            }\n")),
+    reconcile("budget refunded on a moved claim",
+              ("if !tokens_moved {\n            self.balance += entry.amount.0;\n",
+               "if let Some(state) = self.agents.get_mut(&entry.agent_id).filter(|_| tokens_moved) {\n"
+               "            state.spent_today = 0;\n        }\n"
+               "        if !tokens_moved {\n            self.balance += entry.amount.0;\n")),
+    reconcile("another payment's marker cleared",
+              ("if a.pending.as_ref().is_some_and(|p| p.log_id == id) {\n                a.pending = None;",
+               "if true {\n                a.pending = None;")),
+    reconcile("marker never cleared",
+              ('a.pending = None;\n            }\n        }\n        emit_entry("payment_reconciled"',
+               'let _ = &a;\n            }\n        }\n        emit_entry("payment_reconciled"')),
+    reconcile("state rolled back on a claim",
+              ('a.pending = None;\n            }\n        }\n        emit_entry("payment_reconciled"',
+               "if let Some(p) = a.pending.take() {\n                    a.state_commitment = p.old_state;\n                }\n"
+               '            }\n        }\n        emit_entry("payment_reconciled"')),
 
     store("intent not saved",
           ("        self.save()\n    }\n\n    /// Makes the file agree",

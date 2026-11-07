@@ -26,6 +26,10 @@ const GAS_FOR_FT_TRANSFER: Gas = Gas::from_tgas(15);
 const GAS_FOR_CALLBACK: Gas = Gas::from_tgas(15);
 const GAS_FOR_BALANCE_OF: Gas = Gas::from_tgas(10);
 const DEFAULT_MAX_BLOCKED_PER_DAY: u32 = 5;
+/// How old a `Pending` entry must be before the owner can reconcile it, so that
+/// a slow transfer cannot still execute after the decision. NEAR gives no hard
+/// bound on receipt delay, so this is a chosen margin.
+const RECONCILE_AFTER: u64 = NANOS_PER_DAY;
 /// Gas an agent must attach to `pay` so the transfer and its callback can run.
 pub const GAS_FOR_PAY: Gas = Gas::from_tgas(50);
 /// As `GAS_FOR_PAY`, plus proof verification (about 35 Tgas).
@@ -44,6 +48,7 @@ trait SelfCallbacks {
     fn on_pay_transfer(&mut self, id: u32) -> PayOutcome;
     fn on_withdraw(&mut self, amount: U128);
     fn on_sync_balance(&mut self, seq: u64, max_amount: U128) -> U128;
+    fn on_reconcile_unmoved(&mut self, id: u32, seq: u64) -> PayOutcome;
 }
 
 #[near(serializers = [borsh])]
@@ -141,9 +146,12 @@ pub struct ZkVerifyingKeyView {
 pub enum Status {
     /// Within policy; the token transfer is in flight.
     Pending,
-    /// The vendor received the tokens.
+    /// The vendor received the tokens. If `reason` says the owner reconciled the
+    /// entry, this is the owner's claim, not a receipt result.
     Paid,
-    /// The token transfer failed; budget and balance were restored.
+    /// The token transfer failed; budget and balance were restored. If `reason`
+    /// says the owner reconciled the entry, this is the owner's claim, and only
+    /// the balance was restored.
     Failed,
     /// Rejected by policy; nothing was transferred.
     Blocked,
@@ -158,7 +166,8 @@ pub struct LogEntry {
     pub vendor: AccountId,
     pub amount: U128,
     pub status: Status,
-    /// Why the payment was blocked or failed; `None` otherwise.
+    /// Why the payment was blocked or failed, or that the owner reconciled it;
+    /// `None` otherwise.
     pub reason: Option<String>,
     /// Free text from the agent. x402 clients put the payment nonce here.
     pub memo: Option<String>,
@@ -421,6 +430,47 @@ impl Contract {
                     .with_static_gas(GAS_FOR_CALLBACK)
                     .on_sync_balance(self.settle_seq, max_amount),
             )
+    }
+
+    /// Closes a payment whose callback never ran, which would otherwise stay
+    /// `Pending` with its amount reserved. Once the contract is locked, nothing
+    /// else can do this.
+    ///
+    /// A contract cannot read an old receipt's outcome, and its token balance
+    /// cannot settle the question either, so the owner reads the token's
+    /// `ft_transfer` event with memo `nearx402:{id}` and states the result.
+    /// `balance + reserved` never rises here, so a wrong claim cannot create funds:
+    ///
+    /// - `tokens_moved = true` drops the reservation. If that was wrong, the tokens
+    ///   become a surplus that `sync_balance` can credit.
+    /// - `tokens_moved = false` returns the amount to `balance`, after the token
+    ///   confirms it holds everything the contract counts.
+    ///
+    /// Budgets do not go back up, unlike a failure the token reported, because
+    /// this outcome is a claim. Withdrawals have no log entry and are not covered.
+    pub fn reconcile_payment(&mut self, id: u32, tokens_moved: bool) -> PromiseOrValue<PayOutcome> {
+        self.assert_owner();
+        let entry = self
+            .log
+            .get(id)
+            .unwrap_or_else(|| env::panic_str("unknown log entry"));
+        require!(entry.status == Status::Pending, "payment is not pending");
+        require!(
+            env::block_timestamp().saturating_sub(entry.timestamp) >= RECONCILE_AFTER,
+            "payment is too recent to reconcile"
+        );
+        if tokens_moved {
+            return PromiseOrValue::Value(self.close_reconciled(id, true));
+        }
+        ext_ft::ext(self.token_id.clone())
+            .with_static_gas(GAS_FOR_BALANCE_OF)
+            .ft_balance_of(env::current_account_id())
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(GAS_FOR_CALLBACK)
+                    .on_reconcile_unmoved(id, self.settle_seq),
+            )
+            .into()
     }
 
     /// Stores the verifying key of the policy circuit. Replacing it changes
@@ -854,6 +904,30 @@ impl Contract {
         U128(credited)
     }
 
+    /// Finishes a `tokens_moved = false` claim. A refusal changes nothing, so the
+    /// owner can call again.
+    #[private]
+    pub fn on_reconcile_unmoved(&mut self, id: u32, seq: u64) -> PayOutcome {
+        let entry = self
+            .log
+            .get(id)
+            .unwrap_or_else(|| env::panic_str("unknown log entry"));
+        require!(entry.status == Status::Pending, "payment is not pending");
+        require!(
+            seq == self.settle_seq,
+            "a transfer resolved meanwhile, try again"
+        );
+        let held = env::promise_result_checked(0, 64)
+            .ok()
+            .and_then(|bytes| near_sdk::serde_json::from_slice::<U128>(&bytes).ok())
+            .unwrap_or_else(|| env::panic_str("could not read token balance"));
+        require!(
+            held.0 >= self.balance + self.reserved,
+            "the token balance does not cover the wallet, so the tokens appear to have moved"
+        );
+        self.close_reconciled(id, false)
+    }
+
     // ---------- views ----------
 
     pub fn get_owner(&self) -> AccountId {
@@ -1000,6 +1074,46 @@ impl Contract {
         };
         self.log.push(entry);
         PromiseOrValue::Value(outcome)
+    }
+
+    /// Closes a `Pending` entry on the owner's claim. See `reconcile_payment`.
+    fn close_reconciled(&mut self, id: u32, tokens_moved: bool) -> PayOutcome {
+        let entry = self
+            .log
+            .get_mut(id)
+            .unwrap_or_else(|| env::panic_str("unknown log entry"));
+        entry.status = if tokens_moved {
+            Status::Paid
+        } else {
+            Status::Failed
+        };
+        entry.reason = Some(
+            if tokens_moved {
+                "reconciled by the owner: tokens moved"
+            } else {
+                "reconciled by the owner: tokens did not move"
+            }
+            .into(),
+        );
+        let entry = entry.clone();
+        self.reserved -= entry.amount.0;
+        self.settle_seq += 1;
+        if !tokens_moved {
+            self.balance += entry.amount.0;
+        }
+        if let Some(a) = self.zk_agents.get_mut(&entry.agent_id) {
+            // As in `on_pay_transfer`: a rotated agent's marker is gone, or
+            // belongs to a newer payment. The state stays, so spend stays counted.
+            if a.pending.as_ref().is_some_and(|p| p.log_id == id) {
+                a.pending = None;
+            }
+        }
+        emit_entry("payment_reconciled", &entry);
+        PayOutcome {
+            log_id: id,
+            status: entry.status,
+            reason: entry.reason,
+        }
     }
 
     fn view_of(&self, agent_id: AccountId, state: &AgentState) -> AgentView {
@@ -1463,5 +1577,390 @@ mod tests {
         let mut c = setup();
         call_as(agent(), 0);
         c.sync_balance(usdc_cents(1));
+    }
+
+    // ---------- reconcile_payment: a callback that never ran ----------
+    //
+    // A test simulates a lost callback by not calling `on_pay_transfer`.
+
+    /// Sends the owner's claim, as of block time `at`.
+    fn claim(c: &mut Contract, id: u32, tokens_moved: bool, at: u64) -> PromiseOrValue<PayOutcome> {
+        call_as(owner(), at);
+        c.reconcile_payment(id, tokens_moved)
+    }
+
+    /// Runs the callback of a `tokens_moved = false` claim, as if the token reported `held`.
+    fn finish_claim(c: &mut Contract, id: u32, seq: u64, held: Option<U128>) -> PayOutcome {
+        as_callback(match held {
+            Some(h) => PromiseResult::Successful(near_sdk::serde_json::to_vec(&h).unwrap()),
+            None => PromiseResult::Failed,
+        });
+        c.on_reconcile_unmoved(id, seq)
+    }
+
+    /// Everything the contract counts as its own.
+    fn counted(c: &Contract) -> u128 {
+        c.balance + c.reserved
+    }
+
+    /// Runs a call that must panic, returns its message, and checks that the
+    /// books did not change. A real panic also rolls back the state, so this
+    /// shows the check comes before any change.
+    fn refused(c: &mut Contract, f: impl FnOnce(&mut Contract)) -> String {
+        let before = (c.balance, c.reserved, c.settle_seq);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(c)));
+        let Err(payload) = result else {
+            panic!("the call should have panicked");
+        };
+        assert_eq!((c.balance, c.reserved, c.settle_seq), before);
+        payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default()
+    }
+
+    #[test]
+    #[should_panic(expected = "owner only")]
+    fn reconcile_is_for_the_owner_only() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        call_as(agent(), NANOS_PER_DAY);
+        c.reconcile_payment(0, true);
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown log entry")]
+    fn reconcile_refuses_an_unknown_entry() {
+        let mut c = setup();
+        claim(&mut c, 7, true, NANOS_PER_DAY);
+    }
+
+    #[test]
+    fn reconcile_refuses_entries_that_are_not_pending() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        settle(&mut c, 0, true);
+        pay(&mut c, vendor(), usdc_cents(25));
+        settle(&mut c, 1, false);
+        let blocked = outcome(pay(&mut c, accounts(3), usdc_cents(25))).unwrap();
+        assert_eq!(blocked.status, Status::Blocked);
+        for id in [0, 1, 2] {
+            for moved in [true, false] {
+                let text = refused(&mut c, |c| {
+                    claim(c, id, moved, NANOS_PER_DAY);
+                });
+                assert!(text.contains("payment is not pending"), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn reconcile_waits_a_full_day() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        for moved in [true, false] {
+            let text = refused(&mut c, |c| {
+                claim(c, 0, moved, NANOS_PER_DAY - 1);
+            });
+            assert!(text.contains("too recent"), "{text}");
+        }
+        assert!(outcome(claim(&mut c, 0, true, NANOS_PER_DAY)).is_some());
+    }
+
+    #[test]
+    fn reconcile_of_moved_tokens_only_drops_the_reservation() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+
+        let out = outcome(claim(&mut c, 0, true, NANOS_PER_DAY)).unwrap();
+
+        assert_eq!(out.status, Status::Paid);
+        assert_eq!(c.reserved, 0);
+        assert_eq!(c.balance, usdc_cents(975).0);
+        assert_eq!(c.settle_seq, seq + 1);
+        let entry = c.get_log_entry(0).unwrap();
+        assert_eq!(entry.status, Status::Paid);
+        assert!(entry.reason.unwrap().contains("reconciled by the owner"));
+        // No block is known in which the transfer settled.
+        assert_eq!(entry.settled_at, None);
+        call_as(owner(), 0);
+        assert_eq!(
+            spent(&c),
+            usdc_cents(25).0,
+            "the budget must not go back up"
+        );
+    }
+
+    #[test]
+    fn reconcile_of_unmoved_tokens_returns_them_after_reading_the_token() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+
+        assert!(outcome(claim(&mut c, 0, false, NANOS_PER_DAY)).is_none());
+        assert_eq!(
+            c.reserved,
+            usdc_cents(25).0,
+            "nothing changes before the read"
+        );
+        assert_eq!(c.get_log_entry(0).unwrap().status, Status::Pending);
+
+        let out = finish_claim(&mut c, 0, seq, Some(usdc_cents(1000)));
+
+        assert_eq!(out.status, Status::Failed);
+        assert_eq!(c.reserved, 0);
+        assert_eq!(c.balance, usdc_cents(1000).0);
+        assert_eq!(c.settle_seq, seq + 1);
+        let entry = c.get_log_entry(0).unwrap();
+        assert_eq!(entry.status, Status::Failed);
+        assert!(entry.reason.unwrap().contains("reconciled by the owner"));
+        call_as(owner(), 0);
+        assert_eq!(
+            spent(&c),
+            usdc_cents(25).0,
+            "the budget must not go back up"
+        );
+    }
+
+    #[test]
+    fn reconcile_refuses_unmoved_when_the_token_holds_less_than_counted() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        let short = counted(&c) - 1;
+        let text = refused(&mut c, |c| {
+            finish_claim(c, 0, seq, Some(U128(short)));
+        });
+        assert!(text.contains("does not cover"), "{text}");
+        assert_eq!(c.get_log_entry(0).unwrap().status, Status::Pending);
+    }
+
+    #[test]
+    fn reconcile_refuses_unmoved_when_the_token_cannot_be_read() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        let text = refused(&mut c, |c| {
+            finish_claim(c, 0, seq, None);
+        });
+        assert!(text.contains("could not read"), "{text}");
+    }
+
+    #[test]
+    fn reconcile_refuses_unmoved_when_a_transfer_resolved_during_the_read() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        let held = counted(&c);
+        settle(&mut c, 1, true);
+        let text = refused(&mut c, |c| {
+            finish_claim(c, 0, seq, Some(U128(held)));
+        });
+        assert!(text.contains("try again"), "{text}");
+        assert_eq!(c.get_log_entry(0).unwrap().status, Status::Pending);
+    }
+
+    #[test]
+    fn reconcile_cannot_release_the_same_payment_twice() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        let held = counted(&c);
+        // Two claims read the token, or the payment settles meanwhile.
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        finish_claim(&mut c, 0, seq, Some(U128(held)));
+        let text = refused(&mut c, |c| {
+            finish_claim(c, 0, seq + 1, Some(U128(held)));
+        });
+        assert!(text.contains("payment is not pending"), "{text}");
+        assert_eq!(c.balance, usdc_cents(1000).0);
+    }
+
+    #[test]
+    fn a_late_callback_after_reconcile_changes_nothing() {
+        for moved in [true, false] {
+            let mut c = setup();
+            pay(&mut c, vendor(), usdc_cents(25));
+            let seq = c.settle_seq;
+            claim(&mut c, 0, moved, NANOS_PER_DAY);
+            if !moved {
+                finish_claim(&mut c, 0, seq, Some(usdc_cents(1000)));
+            }
+            for ok in [true, false] {
+                let text = refused(&mut c, |c| {
+                    settle(c, 0, ok);
+                });
+                assert!(text.contains("payment is not pending"), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_wrong_reconcile_of_moved_tokens_leaves_them_for_sync_balance() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        // The owner says the tokens moved, but they are still in the wallet.
+        claim(&mut c, 0, true, NANOS_PER_DAY);
+        let held = usdc_cents(1000);
+        let seq = c.settle_seq;
+        assert_eq!(
+            sync(&mut c, seq, usdc_cents(500), Some(held)),
+            usdc_cents(25).0
+        );
+        assert_eq!(c.balance, held.0);
+        assert_eq!(sync(&mut c, seq, usdc_cents(500), Some(held)), 0);
+    }
+
+    #[test]
+    fn reconcile_gives_up_a_balance_read_already_in_flight() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        claim(&mut c, 0, true, NANOS_PER_DAY);
+        // This read came before the reconcile, so its balance is out of date.
+        assert_eq!(
+            sync(&mut c, seq, usdc_cents(500), Some(usdc_cents(1000))),
+            0
+        );
+    }
+
+    #[test]
+    fn reconcile_leaves_other_payments_reserved() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        pay(&mut c, vendor(), usdc_cents(10));
+        claim(&mut c, 0, true, NANOS_PER_DAY);
+        assert_eq!(c.reserved, usdc_cents(10).0);
+        assert_eq!(c.get_log_entry(1).unwrap().status, Status::Pending);
+        settle(&mut c, 1, true);
+        assert_eq!(c.reserved, 0);
+        assert_eq!(c.balance, usdc_cents(965).0);
+    }
+
+    #[test]
+    fn withdraw_after_reconcile_is_limited_to_the_new_balance() {
+        for (moved, balance) in [(true, 975), (false, 1000)] {
+            let mut c = setup();
+            pay(&mut c, vendor(), usdc_cents(25));
+            let seq = c.settle_seq;
+            claim(&mut c, 0, moved, NANOS_PER_DAY);
+            if !moved {
+                finish_claim(&mut c, 0, seq, Some(usdc_cents(1000)));
+            }
+            let text = refused(&mut c, |c| {
+                call_as(owner(), 0);
+                c.withdraw(U128(usdc_cents(balance).0 + 1));
+            });
+            assert!(text.contains("insufficient balance"), "{text}");
+            call_as(owner(), 0);
+            c.withdraw(usdc_cents(balance));
+            assert_eq!(c.balance, 0);
+        }
+    }
+
+    /// Small seeded generator, so a failure repeats without a new dependency.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self, below: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % below
+        }
+    }
+
+    /// Compares the books with a model of what the token holds, across random
+    /// payments, deposits, withdrawals, settled transfers, lost callbacks and
+    /// truthful claims.
+    #[test]
+    fn random_calls_with_reconcile_keep_the_books_equal_to_the_tokens() {
+        for seed in 1..=8u64 {
+            let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+            let mut c = setup();
+            let mut held = c.balance;
+            let mut now = 0u64;
+            call_as(owner(), now);
+            c.set_agent(
+                agent(),
+                U128(u128::from(u64::MAX)),
+                U128(u128::from(u64::MAX)),
+                None,
+            );
+            let mut in_flight: Vec<(u32, u128)> = Vec::new();
+            let mut stuck: Vec<(u32, u128, bool)> = Vec::new();
+
+            for step in 0..400 {
+                match rng.next(7) {
+                    0 | 1 => {
+                        let amount = 1 + u128::from(rng.next(500_000));
+                        if amount <= c.balance {
+                            call_as(agent(), now);
+                            let id = c.get_log_length();
+                            let paid = c.pay(vendor(), U128(amount), None);
+                            assert!(outcome(paid).is_none(), "seed {seed} step {step}");
+                            in_flight.push((id, amount));
+                        }
+                    }
+                    2 if !in_flight.is_empty() => {
+                        let (id, amount) = in_flight.remove(0);
+                        let ok = rng.next(2) == 0;
+                        if ok {
+                            held -= amount;
+                        }
+                        settle(&mut c, id, ok);
+                    }
+                    3 if !in_flight.is_empty() => {
+                        // The callback is lost. The transfer may or may not have moved.
+                        let (id, amount) = in_flight.remove(0);
+                        let moved = rng.next(2) == 0;
+                        if moved {
+                            held -= amount;
+                        }
+                        stuck.push((id, amount, moved));
+                    }
+                    4 => {
+                        now += NANOS_PER_DAY;
+                        // A claim for `moved = false` passes only when nothing
+                        // else is stuck with moved tokens, so settle those first.
+                        stuck.sort_by_key(|s| !s.2);
+                        for (id, _, moved) in stuck.drain(..) {
+                            let seq = c.settle_seq;
+                            let out = claim(&mut c, id, moved, now);
+                            if !moved {
+                                assert!(outcome(out).is_none());
+                                finish_claim(&mut c, id, seq, Some(U128(held)));
+                            }
+                        }
+                    }
+                    5 => {
+                        let amount = 1 + u128::from(rng.next(100_000));
+                        call_as(token(), now);
+                        c.ft_on_transfer(owner(), U128(amount), String::new());
+                        held += amount;
+                    }
+                    _ if c.balance > 0 => {
+                        let amount = 1 + u128::from(rng.next(100_000)).min(c.balance - 1);
+                        call_as(owner(), now);
+                        c.withdraw(U128(amount));
+                        held -= amount;
+                        as_callback(PromiseResult::Successful(vec![]));
+                        c.on_withdraw(U128(amount));
+                    }
+                    _ => {}
+                }
+                let reserved: u128 = in_flight.iter().map(|p| p.1).sum::<u128>()
+                    + stuck.iter().map(|s| s.1).sum::<u128>();
+                let moved: u128 = stuck.iter().filter(|s| s.2).map(|s| s.1).sum();
+                assert_eq!(c.reserved, reserved, "seed {seed} step {step}");
+                assert_eq!(counted(&c), held + moved, "seed {seed} step {step}");
+            }
+        }
     }
 }

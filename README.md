@@ -34,7 +34,7 @@ Against contracts already deployed, finance runs `zk-setup` and the agent runs `
 
 ### On testnet
 
-One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The contract is not locked yet.
+One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The contract is not locked yet. The current source adds `reconcile_payment`, which is not on testnet yet, so that run used the earlier build.
 
 | Step | Result | Transaction |
 | --- | --- | --- |
@@ -205,8 +205,8 @@ scripts/build-contracts.sh
 cargo test --workspace
 ```
 
-161 tests pass as of 7 Nov 2026. They cover:
-- 73 unit tests for the policy contract (including the circuit breaker, `sync_balance`, and `pay_zk` with real proofs) and 2 for the token.
+182 tests pass as of 7 Nov 2026. They cover:
+- 93 unit tests for the policy contract (including the circuit breaker, `sync_balance`, `reconcile_payment`, and `pay_zk` with real proofs) and 2 for the token.
 - 28 tests in `crates/nearx402` for x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
 - One sandbox end-to-end test of the public-limits flow. It runs the real contracts, vendor, facilitator and agent, and covers:
   - replay, a fake contract, a nonce from another resource, and double settlement;
@@ -225,9 +225,10 @@ cargo test --workspace
   - `zk_separate_runs`: finance and the agent as separate processes, crashes, and recovery;
   - `receipt_theft`: an observer rebuilding a proof from public data;
   - `offer_selection` (5 tests): incompatible 402 offers, redirects, and a lost response, on both clients.
+- One sandbox test, `reserved_recovery`, of closing a payment after a lost callback, from state patched into storage.
 - One sandbox test and one unit test for the Groth16 verifier spike.
 
-`scripts/mutation-audit.py` breaks one check at a time and confirms a test fails. Results and limits are in the [review status](docs/review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402). On 7 Nov: 90 mutants, 87 killed, 3 equivalent, 0 survived, over two runs, and then 7 more for how the wallet file is written, all killed in a targeted run. This shows the tests depend on the checks that exist. It does not show the circuit is sound.
+`scripts/mutation-audit.py` breaks one check at a time and confirms a test fails. Results and limits are in the [review status](docs/review/status.md#latest-evidence-7-nov-2026-after-the-rename-to-nearx402). On 7 Nov: 90 mutants, 87 killed, 3 equivalent, 0 survived, over two runs, then 7 more for how the wallet file is written, and 25 for `reconcile_payment`, all killed in targeted runs. This shows the tests depend on the checks that exist. It does not show the circuit is sound.
 
 Run one facilitator instance only: its redemption store is atomic within a single process, not across instances ([SD-006](docs/security-decisions.md#sd-006-redemption-store-stays-single-instance-for-the-hackathon)).
 

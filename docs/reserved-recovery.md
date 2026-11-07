@@ -1,12 +1,12 @@
-# Proposal: recovering `reserved` after a lost callback
+# Recovering `reserved` after a lost callback
 
-**Status: proposal only. Nothing here is implemented, and the contract has not changed.** It answers an open item of the ZK review (`docs/review/status.md`). Steven decides, and Codex challenges the design first.
+**Status: implemented locally, as `reconcile_payment`. Not deployed, and Codex has not reviewed it.** It answers an open item of the ZK review (`docs/review/status.md`). Steven chose to add it and then lock the contract ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)).
 
 ## The problem
 
 A payment moves its amount from `balance` to `reserved`, then calls `ft_transfer`, then `on_pay_transfer` settles it (`contracts/policy/src/lib.rs:618-619`, `:697`, `:783`). If that callback itself fails, nothing settles the payment. The entry stays `Pending`, and nothing lowers `reserved`. `set_zk_agent` clears the ZK agent's in-flight marker (`:474`), but not `reserved`.
 
-**How likely:** low. The callback has a static 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas up front. No test reproduces a lost callback. A protocol change in gas costs, or a bug in the callback, is what this guards against.
+**How likely:** low. The callback has a static 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas up front. No test makes a callback fail by itself. A protocol change in gas costs, or a bug in the callback, is what this guards against.
 
 **Why it matters anyway:** once the contract is locked, code cannot be fixed.
 
@@ -23,7 +23,7 @@ The loss is bounded by the stuck amount. An attacker gains nothing from it.
 
 A contract cannot read the outcome of an old receipt. Its token balance is not enough to infer it: a deposit in flight may already count at the token while `ft_on_transfer` has not run, plain transfers can land at any time, and other payments may be in flight. Anyone could also send tokens to the wallet to make a transfer look failed. So a human must read the result, and the contract must make a wrong claim harmless to solvency.
 
-## Proposed method
+## The method
 
 ```rust
 pub fn reconcile_payment(&mut self, id: u32, tokens_moved: bool) -> PromiseOrValue<PayOutcome>
@@ -55,11 +55,15 @@ Finance reads the token's `ft_transfer` event for memo `nearx402:{id}` in the ex
 
 ## Deployment effect
 
-A new method keeps the stored layout, so the same account can be redeployed in place while it still has a key. The verifying key, agent and log stay. The code hash changes, so the demo refuses to run until `res/policy.wasm` matches, and the testnet demo must run again. After locking, none of this is possible, so **this must be settled before the locking decision**.
+A new method keeps the stored layout: no field of the contract's state changed. So the same account can be redeployed in place while it still has a key, and the verifying key, agent and log stay. **This has not been rehearsed against testnet's state.** A failed decode could be undone by deploying the old build again, as long as the contract is not locked.
 
-## Tests to write first
+The code hash changes to `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH`, so `demo-zk` refuses to run against testnet until the redeploy, and the testnet demo must run again. The order is in [testnet.md](testnet.md).
 
-They must fail on the current code by not compiling, then pass. The existing harness calls `on_pay_transfer` by hand (`contracts/policy/src/zk_tests.rs:193`), so leaving that call out simulates a lost callback.
+## Tests
+
+Written first, and seen to fail on the old code: the unit tests did not compile, and the sandbox test failed with `MethodNotFound`.
+
+**Unit tests, in `contracts/policy/src`.** They simulate a lost callback by not calling `on_pay_transfer`:
 
 | Test | Shows |
 | --- | --- |
@@ -72,19 +76,13 @@ They must fail on the current code by not compiling, then pass. The existing har
 | The entry was settled during the read | Refused, so nothing is released twice |
 | `on_pay_transfer` arrives late, for each claim | Panics, and `reserved` and `balance` do not change |
 | ZK agent after each claim | It can pay again from the current state, which was not rolled back |
-| Agent rotated, or a newer payment in flight | Its marker is left alone. Mirrors `rotated_agent_is_not_rolled_back_by_a_late_failure` and `late_failure_does_not_disturb_a_newer_payment` |
-| Wrong `tokens_moved = true` | `sync_balance` then credits the tokens, and a surplus cannot be credited twice |
+| Agent rotated, or a newer payment in flight | Its marker is left alone |
+| Wrong `tokens_moved = true` | `sync_balance` then credits the tokens, and only once |
 | `withdraw` after each claim | Limited to the new `balance` |
-| Randomly generated sequence of calls | `balance + reserved <= held` after every settled step. This also closes a gap noted in the review status |
+| Random calls: payments, deposits, withdrawals, settlements, lost callbacks and truthful claims, 8 seeds of 400 steps | After every step, `reserved` equals what is in flight or stuck, and `balance + reserved` equals the token balance plus what stuck payments have moved |
 
-Add mutants to `scripts/mutation-audit.py` for the owner check, the age limit, the `Pending` check, the `held` comparison, the `settle_seq` check, both token updates, and the marker's `log_id` check.
+**Sandbox test, `crates/nearx402/tests/reserved_recovery.rs`.** It patches storage to leave the state a lost callback would leave, then runs the real contracts: a false claim refused by the real `ft_balance_of` read, a true claim of each kind, a settled entry, the age limit against real block time, and the private callback refused from outside.
 
-**Limit of these tests:** a really lost callback cannot be produced on a sandbox without a test-only hook in the contract, and this proposal does not add one. The unit tests simulate it. A sandbox test would cover the refusals, the real `ft_balance_of` read, and gas.
+**Mutants:** 25 in `scripts/mutation-audit.py`, all killed by the unit tests. They do not cover `#[private]` on the new callback, which only the sandbox test checks.
 
-## Decision for Steven
-
-| Option | Effect | When it fits |
-| --- | --- | --- |
-| **A. Add the method, then redeploy and rerun the demo (recommended if the contract will be locked)** | About 60 lines of contract code, new review, new evidence | You want to lock, since the README's security model assumes a locked contract |
-| B. Do not add it, and do not lock during the hackathon | No contract change. The evidence stays valid. The owner can still redeploy, so the README must keep saying the contract is not locked | You prefer to protect the current evidence and the 12 Nov target |
-| C. Lock without it | The limit becomes permanent, for an unlikely event | Not recommended |
+**Limits:** no callback was made to fail by itself, and the patched state stands in for one. The random test's claims are all truthful, because a false claim is covered by its own tests. Gas for `reconcile_payment` was not measured, beyond working with 100 Tgas attached. The new method has not run on testnet.

@@ -69,8 +69,8 @@ Test references are to `contracts/policy/src/lib.rs` (unit), `crates/nearx402/sr
 - **Redemption store is one process plus one local file.** Two facilitator instances sharing or duplicating that file can double-redeem. Deployment must run exactly one instance until the store moves to a transactional database (SD-006).
 - **Finality.** The facilitator accepts a fetched transaction outcome. The wait level has not been reviewed against reorg behaviour.
 - **The HMAC is hand-written** on top of `sha2` (`crates/nearx402/src/vendor.rs:174`), against the no-custom-primitives rule. Replacement awaits approval of the RustCrypto `hmac` crate (SD-008).
-- **Callback out of gas** can leave an entry `Pending`, with the budget still reserved. This fails safe for the treasury, but finance has no way to clear it yet.
-- **Not deployed to testnet.** All evidence so far is from a local sandbox.
+- **A callback that never runs** can leave an entry `Pending`, with its amount reserved. Finance can close such an entry with `reconcile_payment` after 24 hours, stating whether the tokens moved. The contract cannot verify a claim that they moved, so a wrong one mislabels the log, but cannot create funds (SD-016). A withdrawal whose callback never runs stays reserved, because it has no log entry.
+- **Testnet evidence is one run** of an earlier build. See [testnet.md](testnet.md).
 
 ## 5. Proof bindings for Option C
 

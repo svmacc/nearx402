@@ -21,7 +21,7 @@ Draft for review. Nothing has been recorded. The narration is about 370 words, w
 | Breaker budget for that UTC day | Each run makes 2 blocked attempts, so 2 runs fit in a day at the limit of 5. On 7 Nov, 2 attempts are already used. `demo-zk` refuses a run that would trip the breaker |
 | Open the explorer link for the new transaction | The links have not been opened in a browser yet |
 | Decide about the dashboard | `--serve` has not run against testnet. If it is added, test it first, or leave it out |
-| Which contract is on chain | Say "not locked" if asked. If `reserved` recovery is added, the contract is redeployed and this run must be repeated |
+| Which contract is on chain | Record after the redeploy, since `demo-zk` refuses to run while the chain holds an older build. The order is in [testnet.md](testnet.md). Say whether the contract is locked at the time of recording |
 
 ## While recording
 

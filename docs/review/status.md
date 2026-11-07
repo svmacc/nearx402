@@ -27,6 +27,29 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 
+## `reconcile_payment`: for Codex's review (7 Nov 2026)
+
+**Status: implemented locally, on Steven's choice to add it and then lock. Codex has not reviewed it, and it is not deployed.** It addresses the open item on recovering `reserved`. Design and limits: [reserved-recovery.md](../reserved-recovery.md), [SD-016](../security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim).
+
+| Check | Result |
+| --- | --- |
+| New tests against the old code | Unit tests did not compile. The sandbox test failed with `MethodNotFound` |
+| New tests against the new code | 20 unit tests with `reconcile` in their name, and one sandbox test, pass |
+| Mutants named `reconcile` | 25 selected: 25 killed, 0 survived, 0 timed out, 0 not run. Contract source restored |
+| Contract's state layout | No field changed. The only lines removed outside tests are three doc comments |
+| Policy code hash | `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH`, which differs from testnet's. The token's is unchanged |
+| Whole workspace | 182 tests pass, clippy and fmt are clean, and `scripts/demo.sh` and `scripts/demo-zk.sh` exit 0 on a sandbox, at 41.16 Tgas per private payment |
+
+The 97 earlier mutants were not run again on this change. No line they target was edited.
+
+**Please challenge:**
+
+- Whether `balance + reserved` never rising is enough, including a `tokens_moved = false` claim masked by a surplus.
+- Whether 24 hours is the right margin.
+- Whether keeping budgets and the ZK state after an unmoved claim is right. The agent loses that amount of budget for the day.
+- Whether leaving withdrawals out is acceptable before a permanent lock.
+- Whether a redeploy in place needs a rehearsal first.
+
 ## Testnet demo: one run, verified by Codex within stated limits (7 Nov 2026)
 
 **Status: Codex verified the on-chain results through RPC at `6d5d27a`, and read the recorded HTTP output. This is not a live rerun of the HTTP flow, not chain evidence for HTTP, and not a completed cryptographic audit.** Claude ran the demo at commit `1520c3e`, with `demo-zk` exit 0, after Steven approved deleting the agent's full-access key. Hashes are in [docs/testnet.md](../testnet.md).
@@ -151,7 +174,7 @@ Reported by Codex on 7 Nov. This is Codex's own evidence, recorded here and not 
 | `intents unbounded` | Selected along with those, and killed |
 | A failed verifier host test | Failed because the compiled manifest path still pointed to `/tmp` after the clone moved, and passed after recompiling. Not a product bug |
 
-**Still open:** Poseidon external vectors and invariant-subspace checks, the gadgets' full internal witnesses, recovery of `reserved` if a callback fails, and the estimate of `Failed` log spam.
+**Still open:** Poseidon external vectors and invariant-subspace checks, the gadgets' full internal witnesses, recovery of `reserved` if a callback fails (now implemented, and awaiting review), and the estimate of `Failed` log spam.
 
 ## Latest evidence (7 Nov 2026, after the rename to nearx402)
 
@@ -464,7 +487,7 @@ Paths: `policy.rs` is `crates/zx402-zk/src/policy.rs`, `zk.rs` is `contracts/pol
 | `pending` stuck | Cleared by the callback, or by `set_zk_agent` | `lib.rs:796-801`, `:474` | `rotated_agent_is_not_rolled_back_by_a_late_failure`, `rotation leaves the in-flight marker` killed | Recovery needs finance |
 | Late callback after rotation | Touches only its own marker | `lib.rs:796` | `late_failure_does_not_disturb_a_newer_payment` | None found |
 | `reserved` and `balance` | Moved together on pay, settle, and failure. `sync_balance` counts both | `lib.rs:618-619`, `:783-786` | `failed_transfer_restores_budget_state_and_funds`, `two_agents_cannot_spend_the_same_balance` | Not tested against a randomly generated sequence of calls |
-| Callback out of gas | Reserved statically at 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas. A shortage would fail the call before the state is saved | `lib.rs:25-32` | **None:** read, and not reproducible in these tests | If the callback ever failed, the entry stays `Pending` and `reserved` stays high. `set_zk_agent` clears `pending`, but **nothing clears `reserved`** |
+| Callback out of gas | Reserved statically at 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas. A shortage would fail the call before the state is saved | `lib.rs:25-32` | **None:** read, and not reproducible in these tests | If the callback ever failed, the entry stays `Pending` and `reserved` stays high. `set_zk_agent` clears `pending`, but not `reserved`. `reconcile_payment` was added later for this |
 | `withdraw` in flight | Limited to `balance` | `lib.rs:382` | `finance_cannot_withdraw_what_a_payment_has_reserved` | None found |
 | Owner rotation | Resets the budget, as finance's decision | `lib.rs:461-474` | `policy_rotation_invalidates_outstanding_proofs`, `old_policy_fails_even_when_named_as_current` | By design |
 | Skipped check | The frozen check comes first, and the stale checks and verification are unconditional on every path to the transfer | `lib.rs:559-601` | `frozen_agent_cannot_pay_even_with_a_valid_proof`, and the mutants | Read for "every path" |

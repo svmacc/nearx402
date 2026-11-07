@@ -19,6 +19,7 @@ Each entry records what we chose, why, and which test enforces it. **Accepted** 
 | SD-013 | The agent's wallet file is plain text, and the chain decides its state | Proposed |
 | SD-014 | A payment's claim is bound by a secret committed in the memo | Proposed |
 | SD-015 | A paying client checks an offer before signing, and follows no redirects | Proposed; lost-response recovery is open |
+| SD-016 | Finance closes a payment with a lost callback, on a stated claim | Chosen by Steven; Codex's review is pending, and it is not deployed |
 
 ## SD-001: Scope is A + C, D is a stretch goal
 
@@ -148,3 +149,11 @@ Found by Codex as CX-01. On NEAR the money moves when the contract is called, be
 **Lost responses, open.** If settlement succeeds and the HTTP 200 is lost, the money has moved and the receipt is spent. The agent now reports the log entry and transaction and says not to pay again, so it does not pay twice by accident, but it does not get the data. Recovering would need the vendor or facilitator to serve a second response to the holder of the secret, which weakens "one receipt, one response" and needs a response cache or an idempotent resource. **Recommendation: keep this as a documented limit for the hackathon.** The loss is bounded by one payment, and needs Steven's decision only if a judge's flow could hit it.
 
 **Limits:** the checks cannot tell whether a compatible offer is honest about what it sells, or whether its price is fair within the budget. The contract's cap and allowlist still bound that. `quote` is shared with `demo-zk`, and the test exercises `quote` and the `pay_zk` flow directly, not by running a hostile vendor against the `demo-zk` binary.
+
+## SD-016: Finance closes a payment with a lost callback, on a stated claim
+
+A locked contract cannot be fixed, so a payment whose callback never ran would stay `Pending` with its amount reserved. Steven chose to add a way out, and to lock afterward. `reconcile_payment` lets the owner state whether the tokens moved, on an entry at least 24 hours old. A wrong claim cannot create funds, because `balance + reserved` never rises. Budgets never go back up. Design, tests and limits are in [reserved-recovery.md](reserved-recovery.md).
+
+**The new power:** finance can label a stuck entry `Paid` or `Failed`. The log then records a claim, and says so in `reason` and in a `payment_reconciled` event. Finance gains no new way to move tokens.
+
+**Limits:** withdrawals are not covered. The 24 hours is a chosen margin, since NEAR gives no hard bound on receipt delay.
