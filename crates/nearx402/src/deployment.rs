@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use zx402_zk::ark_bn254::{Bn254, Fr};
 use zx402_zk::ark_groth16::ProvingKey;
 use zx402_zk::policy::{self, PolicyOpening, SpendState, ZkWallet};
-use zx402_zk::store::{save_proving_key, WalletFile};
+use zx402_zk::store::{save_proving_key, write_private, WalletFile};
 
 use crate::zk::{b64, verifying_key_args};
 
@@ -91,10 +91,7 @@ impl PolicyParams {
 }
 
 fn write_args(path: &Path, args: &Value) -> Result<()> {
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, serde_json::to_vec_pretty(args)?)
-        .with_context(|| format!("write {}", tmp.display()))?;
-    fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))
+    write_private(path, &serde_json::to_vec_pretty(args)?)
 }
 
 fn agent_args(agent: &str, opening: &PolicyOpening, state: &SpendState) -> Result<Value> {
@@ -323,6 +320,26 @@ mod tests {
             assert!(err.contains(expected), "{err}");
         }
         assert!(check(vec![]).unwrap_err().to_string().contains("no access"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn arguments_are_not_written_through_a_leftover_symlink() {
+        let dir = std::env::temp_dir().join(format!("zx402-args-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let victim = dir.join("victim");
+        fs::write(&victim, "keep me").unwrap();
+        // The name this used to write to, before a fresh temporary file.
+        std::os::unix::fs::symlink(&victim, dir.join("args.json.tmp")).unwrap();
+
+        write_args(&dir.join("args.json"), &json!({ "agent_id": "a.testnet" })).unwrap();
+
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "keep me");
+        let written: Value =
+            serde_json::from_slice(&fs::read(dir.join("args.json")).unwrap()).unwrap();
+        assert_eq!(written["agent_id"], "a.testnet");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -121,7 +121,7 @@ It writes these into `.zx402/testnet`, which git ignores:
 | `finance/set_zk_verifying_key.json` | Public key material | The chain |
 | `finance/set_zk_agent.json` | Commitments only | The chain |
 | `agent/proving.key` | Not secret | The agent's machine |
-| `agent/wallet.json` | **The private policy and salts**, readable by its owner only | The agent's machine |
+| `agent/wallet.json` | **The private policy and salts**, readable by its owner only. Keep `agent/` writable by its owner only, and do not symlink the wallet | The agent's machine |
 
 Send the two `finance` files. The tool prints these commands too.
 

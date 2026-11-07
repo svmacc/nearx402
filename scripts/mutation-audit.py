@@ -191,6 +191,16 @@ MUTANTS = [
     store("wallet readable by others", ("options.mode(0o600);", "options.mode(0o644);")),
     store("intents unbounded", ("if self.intents.len() > MAX_INTENTS {", "if false && self.intents.len() > MAX_INTENTS {")),
     store("file version ignored", always("j.version == VERSION,")),
+    store("wallet temp: reuses a leftover",
+          ("options.create_new(true).write(true);", "options.create(true).truncate(true).write(true);")),
+    store("wallet temp: gives up on a leftover",
+          ("Err(e) if e.kind() == ErrorKind::AlreadyExists => {}\n", "")),
+    store("wallet temp: left behind on failure", ("let _ = fs::remove_file(&tmp);", "")),
+    store("wallet symlink: accepted", always("!meta.file_type().is_symlink(),")),
+    store("wallet symlink: open does not check",
+          ("ensure_not_a_symlink(path)?;\n        let text", "let text")),
+    store("wallet symlink: create does not check",
+          ("ensure_not_a_symlink(path)?;\n        ensure!(", "ensure!(")),
 
     deployment("full-access key passes",
                ('let Some(call) = permission.get("FunctionCall") else {',
@@ -198,6 +208,12 @@ MUTANTS = [
     deployment("key may call another contract", always('call["receiver_id"].as_str() == Some(contract.as_str()),')),
     deployment("key may call other methods", always("methods.len() == 1 && methods[0].as_str() == Some(method),")),
     deployment("mainnet config accepted", always('!cfg.network_name.contains("mainnet"),')),
+    deployment("wallet temp: arguments follow a leftover",
+               ("write_private(path, &serde_json::to_vec_pretty(args)?)",
+                'let tmp = path.with_extension("json.tmp");\n'
+                "    fs::write(&tmp, serde_json::to_vec_pretty(args)?)?;\n"
+                "    write_private(path, &[])?;\n"
+                "    Ok(fs::rename(&tmp, path)?)")),
 
     rehearsal("recovery overwrites the current state", DEPLOYMENT,
               ("file.begin(fresh)?;", "file.wallet.state = fresh;\n    file.begin(fresh)?;")),

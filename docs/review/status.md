@@ -27,9 +27,76 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 
+## CX-02: a leftover temporary file could expose the wallet (7 Nov 2026)
+
+**Status: fixed locally, open until Codex verifies it.** Found by Codex, severity P2, on checkpoint `8e63e0b`. Design and threat boundary are in [SD-013](../security-decisions.md).
+
+`save` wrote to a fixed name, `wallet.json.tmp`, and `mode(0o600)` only applies to a file that `open` creates. The file contains the private policy and salts.
+
+| Leftover at `wallet.json.tmp` | Before the fix, reproduced independently | After the fix |
+| --- | --- | --- |
+| A file with mode 0644 | `wallet.json` ends up 0644 | `wallet.json` is 0600, and the leftover is unchanged |
+| A symlink to another file | **That file is overwritten with the policy and salts.** This variant is worse than the reported one | That file is unchanged, and `wallet.json` is a regular file |
+
+**Fix:** `store::write_private` creates a new temporary file with `create_new` and mode 0600, skips names already taken, syncs it, renames it into place, syncs the directory, and removes the temporary file if the write or rename fails.
+
+**Added beyond the finding:**
+
+- `write_args` in `deployment.rs` had the same symlink problem, with public contents, and now uses the same function. Its output files are now 0600 as well.
+- A wallet path that is itself a symlink is refused, including a dangling one. Saving would otherwise replace the link and leave the old private contents wherever it pointed.
+
+**Reproduce:**
+
+```bash
+cargo test -p zx402-zk --lib store
+```
+
+```bash
+python3 -I scripts/mutation-audit.py 'wallet '
+```
+
+The audit rewrites source files while it runs, so use a copy of the repository.
+
+| Check, on a clean copy with no `target/` or `res/` | Actual result |
+| --- | --- |
+| The first two new tests, on the old code | Both failed: mode `420` (0644), and the victim file held the wallet JSON |
+| `leftovers_on_the_names_a_save_tries_are_skipped_untouched` | Passes. It puts a 0644 file, a symlink and a dangling symlink on the names a save really tries, because the first two tests would also pass from the rename alone |
+| Other new tests | No free name: the save fails and the wallet is unchanged. Failed rename: no temporary file left. A readable wallet is 0600 after its next save. Symlinked wallet path refused. Arguments not written through a symlink |
+| Targeted mutants, 8 | 8 killed, 0 survived. Removing `create_new` is killed by the collision test |
+| `cargo test --workspace` | **160 pass**, 0 failed, 0 ignored: the 152 before plus 8 new |
+| Clippy with `-D warnings`, `cargo fmt --check` | Clean |
+| `scripts/demo.sh` | Exit 0. $0.90 paid, $0.00 to the attacker |
+| `scripts/demo-zk.sh` | Exit 0. 0.05 mUSDC paid, 0.00 to the attacker |
+| Code hashes | Policy `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU` and token `HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g`, unchanged. No contract code changed, so this needs no redeploy |
+| `wallet.json*` under the project directory | None, so no real wallet was exposed there. This did not search the rest of the machine |
+
+**Known limits:**
+
+- The `fsync` calls have no test that fails without them. Durability still rests on the order of the calls, and power loss is not tested.
+- A crash between creating and renaming leaves a 0600 temporary file holding the private data. Nothing removes it automatically.
+- A parent directory that others can write to is outside this defence, and the code does not check for it.
+- The `.lock` file holds no data, and opening it follows a symlink.
+- A wallet made readable from outside stays readable until its next save. `open` does not refuse it.
+- Codex's reproduction test asserts 0644 to document the bug, so it should fail now.
+
+## Codex's review of checkpoint `8e63e0b`
+
+Reported by Codex on 7 Nov. This is Codex's own evidence, recorded here and not re-run by Claude. **Codex states that this review does not certify soundness.**
+
+| Check | Codex's result |
+| --- | --- |
+| Changes from `1c0241f` to `8e63e0b` | Documentation only |
+| Clean build, compared with the view at `FINAL` on testnet | Policy and token hashes match, at blocks 276621100 and 276621104 |
+| `offer_selection`, `receipt_theft`, `zk_double_spend` after the rename | Pass |
+| `context unbound`, `invoice unbound`, `agent's day as input` | Re-run: equivalent on the current tests. The source of `LibsnarkReduction` does put public inputs into the QAP |
+| `intents unbounded` | Selected along with those, and killed |
+| A failed verifier host test | Failed because the compiled manifest path still pointed to `/tmp` after the clone moved, and passed after recompiling. Not a product bug |
+
+**Still open:** Poseidon external vectors and invariant-subspace checks, the gadgets' full internal witnesses, recovery of `reserved` if a callback fails, and the estimate of `Failed` log spam.
+
 ## Latest evidence (7 Nov 2026, after the rename to nearx402)
 
-Nothing is committed or pushed. The results below are from a local sandbox. **Separately, the contracts are now deployed on testnet, and the flow has not run there.** Claude did not do that deploy. See [testnet.md](../testnet.md) for the state read from the chain.
+Nothing was pushed. The results below are from a local sandbox. **Separately, the contracts are now deployed on testnet, and the flow has not run there.** Claude did not do that deploy. See [testnet.md](../testnet.md) for the state read from the chain.
 
 | Check | Actual result |
 | --- | --- |
@@ -74,6 +141,8 @@ This run came before the tests added for the soundness answers. Those changes to
 
 **One thing the strengthened tests changed:** `leaf not from the public vendor` is now killed by one test, and no longer by `empty_allowlist_slot_is_not_a_valid_leaf`. That test used to fail on this mutant only because its path was wrong. It now tests the empty slot, and a wrong leaf misses the root there anyway.
 
+**Added since, for CX-02:** 7 new mutants, which brings the script to 97. They and `wallet readable by others` ran as a targeted set on the final tree, and all 8 were killed. The other 89 were not re-run for that change, which touched only the wallet file's writing and the setup arguments.
+
 **What this does not show:** an audit shows that tests depend on the checks that exist. It cannot find a check nobody wrote, so it does not show the circuit is sound.
 
 ## How we work
@@ -82,7 +151,7 @@ Roles and rules are in [AGENTS.md](../../AGENTS.md). In short: Claude changes th
 
 ## Findings tracked for Codex's verification
 
-These are **two separate findings**. The receipt secret does not close CX-01, and the offer check does not close the receipt theft.
+CX-01 and the receipt theft are **two separate findings**. The receipt secret does not close CX-01, and the offer check does not close the receipt theft.
 
 | Finding | When it happens | Status | Reproduce |
 | --- | --- | --- | --- |
@@ -90,6 +159,7 @@ These are **two separate findings**. The receipt secret does not close CX-01, an
 | CX-01, follow-up: redirect carries the proof | After payment, on the retry | Fixed. Same verification as above | Same command |
 | CX-01, follow-up: HTTP 200 lost after settlement | After settlement | **Reported, not recovered.** Decision below | Same command |
 | Receipt theft: observer claims first | **After** payment | Fixed. Same verification as above | `cargo test -p nearx402 --test receipt_theft -- --nocapture` |
+| CX-02: leftover temporary file exposes the wallet | Any save | **Fixed locally, open until Codex verifies it** | `cargo test -p zx402-zk --lib store` |
 
 ## CX-01: the agent paid before checking the offer
 

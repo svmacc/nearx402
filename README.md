@@ -2,7 +2,7 @@
 
 A spend-policy wallet for AI agents that pay x402 APIs, settled on NEAR. Built at NEAR HACKATHON 2026.
 
-Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every blocked attempt lands in an on-chain audit log.
+Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every attempt the policy blocks lands in an on-chain audit log. A call that reverts, such as malformed input or an already frozen agent, writes nothing.
 
 > **Status (7 Nov 2026):** runs end to end on a local NEAR sandbox. On testnet the contracts are deployed, but the payment flow has not run there yet ([plan](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
 

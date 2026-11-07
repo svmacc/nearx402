@@ -14,7 +14,7 @@
 //! still land after a newer one was prepared.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -33,6 +33,9 @@ const VERSION: u32 = 1;
 /// Unconfirmed intents kept. A send that lands after this many newer attempts
 /// needs recovery through `set_zk_agent`; funds stay safe either way.
 const MAX_INTENTS: usize = 32;
+/// Temporary names tried per save. One free name is enough, and only leftovers
+/// from crashed processes with the same pid can take any.
+const MAX_TEMP_ATTEMPTS: u32 = 64;
 
 /// A field element as base64 of 32 little-endian bytes. Rejects anything but the
 /// canonical encoding, so one value has only one spelling.
@@ -124,6 +127,7 @@ impl WalletFile {
     /// so this refuses to replace one.
     pub fn create(path: &Path, wallet: ZkWallet) -> Result<Self> {
         let lock = take_lock(path)?;
+        ensure_not_a_symlink(path)?;
         ensure!(
             !path.exists(),
             "{} already exists; it holds salts that cannot be recreated",
@@ -141,6 +145,7 @@ impl WalletFile {
 
     pub fn open(path: &Path) -> Result<Self> {
         let lock = take_lock(path)?;
+        ensure_not_a_symlink(path)?;
         let text = fs::read_to_string(path)
             .with_context(|| format!("read wallet file {}", path.display()))?;
         let j: WalletJson = serde_json::from_str(&text)
@@ -229,18 +234,85 @@ impl WalletFile {
             state: (&w.state).into(),
             intents: self.intents.iter().map(StateJson::from).collect(),
         };
-        let tmp = sibling(&self.path, "tmp");
-        {
-            let mut f = private_file(&tmp)?;
-            serde_json::to_writer_pretty(&mut f, &json)?;
-            f.flush()?;
-            f.sync_all()
-                .with_context(|| format!("sync {}", tmp.display()))?;
+        write_private(&self.path, &serde_json::to_vec_pretty(&json)?)
+    }
+}
+
+/// Replaces `path` with `contents`, readable by its owner only on Unix.
+///
+/// A crash leaves either the old file or the new one, never a partial one. The
+/// contents go to a new temporary file beside it, so a leftover file or symlink
+/// can neither lend its permissions to the result nor be written through.
+///
+/// This defends against leftovers, not against another user who can write to the
+/// parent directory: they could swap or delete files whatever this does. Keep the
+/// directory writable by its owner only.
+pub fn write_private(path: &Path, contents: &[u8]) -> Result<()> {
+    let (mut file, tmp) = new_temp_file(path)?;
+    let replaced = file
+        .write_all(contents)
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("write {}", tmp.display()))
+        .and_then(|()| {
+            fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))
+        });
+    if replaced.is_err() {
+        // The contents may be private, so do not leave them behind.
+        let _ = fs::remove_file(&tmp);
+    }
+    replaced?;
+    File::open(parent(path))
+        .and_then(|d| d.sync_all())
+        .with_context(|| format!("sync the directory of {}", path.display()))
+}
+
+fn temp_name(path: &Path, pid: u32, attempt: u32) -> PathBuf {
+    sibling(path, &format!("{pid}.{attempt}.tmp"))
+}
+
+/// The name only has to avoid leftovers: `create_new` is what makes this safe,
+/// since it fails on anything already there, including a dangling symlink.
+fn new_temp_file(path: &Path) -> Result<(File, PathBuf)> {
+    for attempt in 0..MAX_TEMP_ATTEMPTS {
+        let tmp = temp_name(path, std::process::id(), attempt);
+        match private_new_file(&tmp) {
+            Ok(file) => return Ok((file, tmp)),
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e).with_context(|| format!("create {}", tmp.display())),
         }
-        fs::rename(&tmp, &self.path).with_context(|| format!("replace {}", self.path.display()))?;
-        File::open(parent(&self.path))
-            .and_then(|d| d.sync_all())
-            .with_context(|| format!("sync the directory of {}", self.path.display()))
+    }
+    bail!(
+        "no free temporary name beside {} after {MAX_TEMP_ATTEMPTS} attempts; look for leftover \
+         .tmp files there",
+        path.display()
+    )
+}
+
+fn private_new_file(path: &Path) -> std::io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Saving would replace a symlink with a file, and leave the old contents behind
+/// wherever it pointed, so a wallet file has to be a plain file.
+fn ensure_not_a_symlink(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            ensure!(
+                !meta.file_type().is_symlink(),
+                "{} is a symlink; a wallet file must be a regular file",
+                path.display()
+            );
+            Ok(())
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("inspect {}", path.display())),
     }
 }
 
@@ -274,20 +346,6 @@ fn take_lock(path: &Path) -> Result<File> {
         }
         Err(TryLockError::Error(e)) => Err(anyhow!(e).context("lock the wallet file")),
     }
-}
-
-/// Readable by its owner only, since a wallet file holds the private policy.
-fn private_file(path: &Path) -> Result<File> {
-    let mut options = OpenOptions::new();
-    options.create(true).write(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options
-        .open(path)
-        .with_context(|| format!("create {}", path.display()))
 }
 
 /// Saves the proving key. It is not secret, and refuses to replace an existing
@@ -584,6 +642,151 @@ mod tests {
         f.begin(next(&mut r, 1)).unwrap();
         let mode = fs::metadata(d.wallet()).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+    }
+
+    /// Codex's reproduction: `mode(0o600)` only applies to a file it creates.
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_readable_temp_file_does_not_make_the_wallet_readable() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = Dir::new("stale-temp");
+        let mut r = rng();
+        let stale = sibling(&d.wallet(), "tmp");
+        fs::write(&stale, "left behind").unwrap();
+        fs::set_permissions(&stale, fs::Permissions::from_mode(0o644)).unwrap();
+
+        drop(WalletFile::create(&d.wallet(), wallet(&mut r)).unwrap());
+
+        let mode = fs::metadata(d.wallet()).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_temp_symlink_is_not_followed() {
+        let d = Dir::new("stale-link");
+        let mut r = rng();
+        let victim = d.0.join("victim");
+        fs::write(&victim, "keep me").unwrap();
+        std::os::unix::fs::symlink(&victim, sibling(&d.wallet(), "tmp")).unwrap();
+
+        drop(WalletFile::create(&d.wallet(), wallet(&mut r)).unwrap());
+
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "keep me");
+        let meta = fs::symlink_metadata(d.wallet()).unwrap();
+        assert!(meta.file_type().is_file());
+    }
+
+    /// The two tests above pass by the name changing alone. This one puts leftovers
+    /// on the names a save actually tries, so it needs `create_new` to pass.
+    #[cfg(unix)]
+    #[test]
+    fn leftovers_on_the_names_a_save_tries_are_skipped_untouched() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = Dir::new("collisions");
+        let mut r = rng();
+        let pid = std::process::id();
+        let readable = temp_name(&d.wallet(), pid, 0);
+        fs::write(&readable, "readable").unwrap();
+        fs::set_permissions(&readable, fs::Permissions::from_mode(0o644)).unwrap();
+        let victim = d.0.join("victim");
+        fs::write(&victim, "keep me").unwrap();
+        let link = temp_name(&d.wallet(), pid, 1);
+        std::os::unix::fs::symlink(&victim, &link).unwrap();
+        let dangling = temp_name(&d.wallet(), pid, 2);
+        let missing = d.0.join("missing");
+        std::os::unix::fs::symlink(&missing, &dangling).unwrap();
+
+        let mut f = WalletFile::create(&d.wallet(), wallet(&mut r)).unwrap();
+        f.begin(next(&mut r, 1)).unwrap();
+
+        let meta = fs::symlink_metadata(d.wallet()).unwrap();
+        assert!(meta.file_type().is_file());
+        assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+        assert_eq!(fs::read_to_string(&readable).unwrap(), "readable");
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "keep me");
+        assert!(fs::symlink_metadata(&link).unwrap().is_symlink());
+        assert!(fs::symlink_metadata(&dangling).unwrap().is_symlink());
+        assert!(!missing.exists(), "a dangling symlink was written through");
+        drop(f);
+        assert_eq!(WalletFile::open(&d.wallet()).unwrap().intents.len(), 1);
+    }
+
+    #[test]
+    fn with_no_free_temp_name_the_save_fails_and_the_wallet_survives() {
+        let d = Dir::new("no-name");
+        let mut r = rng();
+        let w = wallet(&mut r);
+        let state = w.state.commitment();
+        let mut f = WalletFile::create(&d.wallet(), w).unwrap();
+        let before = fs::read(d.wallet()).unwrap();
+        for attempt in 0..MAX_TEMP_ATTEMPTS {
+            fs::write(temp_name(&d.wallet(), std::process::id(), attempt), "").unwrap();
+        }
+        let err = f.begin(next(&mut r, 1)).unwrap_err().to_string();
+        assert!(err.contains("no free temporary name"), "{err}");
+        assert_eq!(fs::read(d.wallet()).unwrap(), before);
+        assert_eq!(f.wallet.state.commitment(), state);
+    }
+
+    #[test]
+    fn a_failed_replace_leaves_no_temp_file_behind() {
+        let d = Dir::new("failed-rename");
+        // A directory that is not empty cannot be replaced by a rename.
+        let target = d.0.join("target");
+        fs::create_dir_all(target.join("inside")).unwrap();
+        assert!(write_private(&target, b"private").is_err());
+        let names: Vec<_> = fs::read_dir(&d.0)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["target"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_readable_wallet_is_private_after_the_next_save() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = Dir::new("repair");
+        let mut r = rng();
+        drop(WalletFile::create(&d.wallet(), wallet(&mut r)).unwrap());
+        fs::set_permissions(d.wallet(), fs::Permissions::from_mode(0o644)).unwrap();
+
+        let mut f = WalletFile::open(&d.wallet()).unwrap();
+        f.begin(next(&mut r, 1)).unwrap();
+
+        let mode = fs::metadata(d.wallet()).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_wallet_path_that_is_a_symlink_is_refused() {
+        let d = Dir::new("wallet-link");
+        let mut r = rng();
+        let elsewhere = d.0.join("elsewhere.json");
+        drop(WalletFile::create(&elsewhere, wallet(&mut r)).unwrap());
+        let before = fs::read(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, d.wallet()).unwrap();
+
+        let err = WalletFile::open(&d.wallet()).err().unwrap().to_string();
+        assert!(err.contains("symlink"), "{err}");
+        let err = WalletFile::create(&d.wallet(), wallet(&mut r))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("symlink"), "{err}");
+
+        // `exists()` follows links, so a dangling one must be caught here too.
+        let dangling = d.0.join("dangling.json");
+        std::os::unix::fs::symlink(d.0.join("missing"), &dangling).unwrap();
+        let err = WalletFile::create(&dangling, wallet(&mut r))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("symlink"), "{err}");
+
+        assert_eq!(fs::read(&elsewhere).unwrap(), before);
     }
 
     #[test]

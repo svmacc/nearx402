@@ -117,4 +117,4 @@ A mutation audit shows that tests depend on the checks that exist. It cannot fin
 - **Malformed proofs escape the breaker** (SD-004).
 - **One payment at a time per agent** (SD-005).
 - **The prover needs the proving key and the private policy on the agent's machine.**
-- **The wallet file holds the private policy and salts in plain text**, readable by its owner only (SD-013). Losing it means finance must set a new policy through `set_zk_agent`, unless finance kept a copy. A stale copy recovers with `zk-setup recover`, which also resets the day's spending.
+- **The wallet file holds the private policy and salts in plain text**, readable by its owner only, in a directory only its owner can write to (SD-013). Losing it means finance must set a new policy through `set_zk_agent`, unless finance kept a copy. A stale copy recovers with `zk-setup recover`, which also resets the day's spending.

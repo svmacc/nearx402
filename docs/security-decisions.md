@@ -108,6 +108,16 @@ The chain holds only a commitment to the spending state, so a wallet that forget
 
 The file holds the private policy and salts unencrypted, with owner-only permissions on Unix. Encrypting it would add little here: the agent must read the policy to prove, so a compromised agent already learns it (see [threat-model.md](threat-model.md#6-what-each-observer-learns)). **Knowing the file does not let anyone break the policy**, since the circuit still enforces it. An advisory lock keeps two processes from overwriting each other's intents. Backups need care, since a restored old copy needs recovery, and recovery resets the day's spending. **Status: Proposed.**
 
+**How a save writes the file.** Each save creates a new temporary file beside the wallet with `create_new` and mode 0600, skips any name already taken, syncs it, renames it into place, and syncs the directory. `create_new` fails on anything already at that name, including a symlink, so a leftover can neither lend its permissions to the wallet nor be written through. A wallet path that is itself a symlink is refused. Reviewer finding CX-02 showed why this matters: an earlier version reused a fixed temporary name, so a stale 0644 file made the wallet world-readable, and a stale symlink received the salts.
+
+**What this does and does not defend against.** It handles leftovers from crashes, earlier runs and mistakes.
+
+- **The parent directory is trusted.** Anyone who can write to it, other than its owner, can swap or delete the wallet whatever the code does. Keep it writable by its owner only. The code does not check this.
+- A crash between creating and renaming a temporary file leaves it behind. It holds the same private data at 0600, and nothing removes it automatically.
+- A wallet made readable from outside, for example by a copy, stays readable until its next save.
+- The `.lock` file holds no data, and opening it does follow a symlink.
+- On non-Unix systems the mode is not set.
+
 Enforced by the tests in `store.rs` and by `crates/nearx402/tests/zk_separate_runs.rs`, which crash after and before sending, and restore an old backup, on a local sandbox.
 
 ## SD-014: A payment's claim is bound by a secret committed in the memo
