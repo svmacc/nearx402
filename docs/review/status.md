@@ -29,26 +29,49 @@ Every use of the old name in the earlier history was checked. It was this projec
 
 ## `reconcile_payment`: for Codex's review (7 Nov 2026)
 
-**Status: implemented locally, on Steven's choice to add it and then lock. Codex has not reviewed it, and it is not deployed.** It addresses the open item on recovering `reserved`. Design and limits: [reserved-recovery.md](../reserved-recovery.md), [SD-016](../security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim).
+**Status: implemented locally, on Steven's choice to add it and then lock. Not deployed. Codex reviewed `3f28d24` and has not yet reviewed the answer below.** It addresses the open item on recovering `reserved`. Design and limits: [reserved-recovery.md](../reserved-recovery.md), [SD-016](../security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim).
+
+**Codex's review of `3f28d24`:** 20 unit tests and the sandbox test passed independently. Codex recommended neither a redeploy nor a lock until two questions were answered, and said not to report its model as a proven on-chain exploit.
+
+| Codex's question | Answer |
+| --- | --- |
+| A transfer that executes after the balance read leaves `balance` above the tokens held, and `balance + reserved` not rising does not prove solvency | **Accepted. Claude's claim was too strong, and is withdrawn.** Claude reproduced it, with both claims, and two tests now pin it. No published ordering guarantee was found, so reachability is not shown either way. The answer is a precondition on the operator, not a longer wait: the transaction must be `FINAL`, and the transfer's outcome read |
+| Rehearse the old build, the new build, and the old build again, with no init | Done, below |
+| Withdrawals are not covered | Consequences written for Steven, in reserved-recovery.md |
+
+**Contract logic did not change in this answer.** Outside the tests, only comments did, which moved lines and so changed the code hash.
+
+**Rehearsal, `scripts/upgrade-rehearsal.sh`, on a local sandbox.** The old file is built from `32b3be4`, and the test requires its hash to equal testnet's, `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`.
+
+| Step | Result |
+| --- | --- |
+| Old build writes a verifying key, a ZK agent, funds, and a log with public, private and blocked entries | Passes |
+| Old to `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`, by a real deploy action with no init call | Every storage key and value unchanged. Nine views return the same, which shows the new code decodes the state |
+| A second `new` on the new build | Refused, and nothing changes |
+| New build pays, publicly and privately, blocks an attempt, and runs `reconcile_payment` in both forms | Passes. Books equal the token balance |
+| New back to old | Every storage key and value unchanged, and the old code reads reconciled entries |
+| Old build pays and blocks again, and `reconcile_payment` is gone | Passes, with `MethodNotFound` |
+| **Control:** the same test with a build that adds one state field | **Fails, as it must:** `Cannot deserialize the contract state` |
+
+**Limits of the rehearsal:** a sandbox is not testnet, and no payment was in flight during a deploy. `World` initialises the contract with the current build, and the test swaps to the old build before anything else is written. The policy's key was restored by a patch, because `World` locks the contract. The access key on testnet was not used.
 
 | Check | Result |
 | --- | --- |
 | New tests against the old code | Unit tests did not compile. The sandbox test failed with `MethodNotFound` |
-| New tests against the new code | 20 unit tests with `reconcile` in their name, and one sandbox test, pass |
+| New tests against the new code | 22 unit tests with `reconcile` in their name, and one sandbox test, pass |
 | Mutants named `reconcile` | 25 selected: 25 killed, 0 survived, 0 timed out, 0 not run. Contract source restored |
 | Contract's state layout | No field changed. The only lines removed outside tests are three doc comments |
-| Policy code hash | `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH`, which differs from testnet's. The token's is unchanged |
-| Whole workspace | 182 tests pass, clippy and fmt are clean, and `scripts/demo.sh` and `scripts/demo-zk.sh` exit 0 on a sandbox, at 41.16 Tgas per private payment |
+| Policy code hash | `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`, which differs from testnet's. The token's is unchanged. `3f28d24` built to `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH` |
+| Whole workspace | 184 tests pass and the rehearsal is ignored by default, clippy and fmt are clean, and `scripts/demo.sh` and `scripts/demo-zk.sh` exit 0 on a sandbox, at 41.16 Tgas per private payment |
 
 The 97 earlier mutants were not run again on this change. No line they target was edited.
 
 **Please challenge:**
 
-- Whether `balance + reserved` never rising is enough, including a `tokens_moved = false` claim masked by a surplus.
-- Whether 24 hours is the right margin.
+- Whether the operator's precondition closes the schedule, in particular whether `FINAL` covers every receipt of the transaction as the RPC page says.
+- A `tokens_moved = false` claim masked by a surplus.
 - Whether keeping budgets and the ZK state after an unmoved claim is right. The agent loses that amount of budget for the day.
-- Whether leaving withdrawals out is acceptable before a permanent lock.
-- Whether a redeploy in place needs a rehearsal first.
+- Whether leaving withdrawals out is acceptable before a permanent lock. That one is Steven's to decide.
 
 ## Testnet demo: one run, verified by Codex within stated limits (7 Nov 2026)
 

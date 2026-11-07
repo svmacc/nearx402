@@ -152,8 +152,10 @@ Found by Codex as CX-01. On NEAR the money moves when the contract is called, be
 
 ## SD-016: Finance closes a payment with a lost callback, on a stated claim
 
-A locked contract cannot be fixed, so a payment whose callback never ran would stay `Pending` with its amount reserved. Steven chose to add a way out, and to lock afterward. `reconcile_payment` lets the owner state whether the tokens moved, on an entry at least 24 hours old. A wrong claim cannot create funds, because `balance + reserved` never rises. Budgets never go back up. Design, tests and limits are in [reserved-recovery.md](reserved-recovery.md).
+A locked contract cannot be fixed, so a payment whose callback never ran would stay `Pending` with its amount reserved. Steven chose to add a way out, and to lock afterward. `reconcile_payment` lets the owner state whether the tokens moved, on an entry at least 24 hours old. Budgets never go back up. Design, tests and limits are in [reserved-recovery.md](reserved-recovery.md).
 
-**The new power:** finance can label a stuck entry `Paid` or `Failed`. The log then records a claim, and says so in `reason` and in a `payment_reconciled` event. Finance gains no new way to move tokens.
+**The contract cannot check the precondition.** The owner must first see the payment's transaction `FINAL`, and read its transfer's outcome. Codex showed that the contract's own checks are not enough: a transfer executing after the balance read would leave `balance` above the tokens held. Whether NEAR allows that schedule is not shown either way, and no published guarantee was found, so this design does not rely on receipt order.
 
-**Limits:** withdrawals are not covered. The 24 hours is a chosen margin, since NEAR gives no hard bound on receipt delay.
+**The new power:** finance can label a stuck entry `Paid` or `Failed`. The log then records a claim, and says so in `reason` and in a `payment_reconciled` event. Finance gains no new way to move tokens, and nobody else can call the method. A mistake by the owner can make later payments fail. The token still refuses to move more than it holds.
+
+**Limits:** withdrawals are not covered, so a lost withdrawal callback after locking leaves that amount reserved for good. The 24 hours is a backstop against a hasty call, not evidence.

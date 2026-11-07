@@ -26,9 +26,9 @@ const GAS_FOR_FT_TRANSFER: Gas = Gas::from_tgas(15);
 const GAS_FOR_CALLBACK: Gas = Gas::from_tgas(15);
 const GAS_FOR_BALANCE_OF: Gas = Gas::from_tgas(10);
 const DEFAULT_MAX_BLOCKED_PER_DAY: u32 = 5;
-/// How old a `Pending` entry must be before the owner can reconcile it, so that
-/// a slow transfer cannot still execute after the decision. NEAR gives no hard
-/// bound on receipt delay, so this is a chosen margin.
+/// How old a `Pending` entry must be before the owner can reconcile it. This is a
+/// backstop against a hasty call, not evidence: NEAR gives no bound on receipt
+/// delay. The owner must first see the transaction `FINAL`.
 const RECONCILE_AFTER: u64 = NANOS_PER_DAY;
 /// Gas an agent must attach to `pay` so the transfer and its callback can run.
 pub const GAS_FOR_PAY: Gas = Gas::from_tgas(50);
@@ -436,15 +436,20 @@ impl Contract {
     /// `Pending` with its amount reserved. Once the contract is locked, nothing
     /// else can do this.
     ///
-    /// A contract cannot read an old receipt's outcome, and its token balance
-    /// cannot settle the question either, so the owner reads the token's
-    /// `ft_transfer` event with memo `nearx402:{id}` and states the result.
-    /// `balance + reserved` never rises here, so a wrong claim cannot create funds:
+    /// A contract cannot read an old receipt's outcome, so the owner must read it.
+    /// **Precondition, which the contract cannot check:** the payment's transaction
+    /// is `FINAL`, so every receipt has finished, and the owner has read the outcome
+    /// of its `ft_transfer` receipt. An entry's age, or a missing event, shows nothing.
+    /// See docs/reserved-recovery.md.
     ///
-    /// - `tokens_moved = true` drops the reservation. If that was wrong, the tokens
-    ///   become a surplus that `sync_balance` can credit.
-    /// - `tokens_moved = false` returns the amount to `balance`, after the token
-    ///   confirms it holds everything the contract counts.
+    /// - `tokens_moved = true` drops the reservation.
+    /// - `tokens_moved = false` returns the amount to `balance`, if a read of the
+    ///   token shows it holds everything the contract counts. That read is a
+    ///   snapshot, and does not prove that no transfer is still to come.
+    ///
+    /// If the precondition is skipped and a transfer is still in flight, `balance`
+    /// can exceed the tokens held. The token still refuses to move more than it
+    /// holds, so later payments fail rather than overspend.
     ///
     /// Budgets do not go back up, unlike a failure the token reported, because
     /// this outcome is a claim. Withdrawals have no log entry and are not covered.
@@ -1863,6 +1868,49 @@ mod tests {
             c.withdraw(usdc_cents(balance));
             assert_eq!(c.balance, 0);
         }
+    }
+
+    // The next two tests pin a known limit, found by Codex. They are a model: no
+    // test shows that a transfer can be this late on NEAR, and no published
+    // guarantee rules it out. So the precondition of `reconcile_payment` matters.
+
+    #[test]
+    fn reconcile_cannot_see_a_transfer_still_in_flight_after_an_unmoved_claim() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        // The read reaches the token first, and the transfer succeeds after it.
+        finish_claim(&mut c, 0, seq, Some(usdc_cents(1000)));
+        let tokens_after_transfer = usdc_cents(975).0;
+
+        assert_eq!(c.balance - tokens_after_transfer, usdc_cents(25).0);
+        assert_eq!(c.reserved, 0);
+        let text = refused(&mut c, |c| {
+            settle(c, 0, true);
+        });
+        assert!(text.contains("payment is not pending"), "{text}");
+    }
+
+    #[test]
+    fn reconcile_cannot_see_a_transfer_still_in_flight_after_a_moved_claim_and_a_sync() {
+        let mut c = setup();
+        pay(&mut c, vendor(), usdc_cents(25));
+        claim(&mut c, 0, true, NANOS_PER_DAY);
+        // The tokens are still in the wallet, so a sync credits them.
+        let seq = c.settle_seq;
+        assert_eq!(
+            sync(&mut c, seq, usdc_cents(500), Some(usdc_cents(1000))),
+            usdc_cents(25).0
+        );
+        // Then the transfer succeeds.
+        let tokens_after_transfer = usdc_cents(975).0;
+
+        assert_eq!(c.balance - tokens_after_transfer, usdc_cents(25).0);
+        let text = refused(&mut c, |c| {
+            settle(c, 0, true);
+        });
+        assert!(text.contains("payment is not pending"), "{text}");
     }
 
     /// Small seeded generator, so a failure repeats without a new dependency.

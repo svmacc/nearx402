@@ -2,7 +2,7 @@
 
 Status: 7 Nov 2026. **The demo ran once on testnet and its checks passed, on the build below.** The contract is not locked, and the vendor and facilitator ran on a local machine talking to testnet.
 
-**The source is now ahead of testnet.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `2mqyriU2CdnhNHnzYQF4E1VG3EvNXsnrsMBzCz5z1jYH`. So `demo-zk` refuses to run against testnet until the redeploy described under [Next steps](#next-steps).
+**The source is now ahead of testnet.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. So `demo-zk` refuses to run against testnet until the redeploy described under [Next steps](#next-steps).
 
 Read from the chain at final with view calls:
 
@@ -46,10 +46,10 @@ Steven chose to add `reconcile_payment`, and then to lock. In this order, each w
 | # | Step | Why here |
 | --- | --- | --- |
 | 1 | Codex reviews `reconcile_payment` | The contract cannot be fixed after locking |
-| 2 | Redeploy the policy in place, then read the state back | Keeps the verifying key, agent, log and funds. The old build can still be restored at this point |
+| 2 | Redeploy the policy in place, then read the state back | Keeps the verifying key, agent, log and funds. `scripts/upgrade-rehearsal.sh` rehearses this and going back on a sandbox. The old build can still be restored at this point |
 | 3 | Run the demo on the new build | Evidence for the code that will be locked. Each run uses 2 of the day's 5 blocked attempts |
 | 4 | Record the video | Before locking, so a problem found on camera can still be fixed |
-| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys |
+| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys. After this, a lost withdrawal callback leaves that amount reserved for good, as [reserved-recovery.md](reserved-recovery.md) explains |
 
 ```bash
 near contract deploy nearx402-policy.testnet use-file res/policy.wasm without-init-call network-config testnet sign-with-legacy-keychain send
