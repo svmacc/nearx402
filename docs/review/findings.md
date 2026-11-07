@@ -1,0 +1,7 @@
+
+## CX-01 — Medium — Agent pays before authenticating supported payment terms
+
+Codex comparison, 7 Nov. In crates/nearx402/src/agent.rs:59–70, Agent::fetch selects by scheme, parses vendor and price, then calls pay before validating the advertised network, asset and trusted policy hash. The facilitator checks these only after the transfer (facilitator.rs:341 onward). A faulty or hostile 402 can name an approved payee and in-budget amount but a foreign token/network. Our configured token can move while the requested purchase fails. This does not bypass the contract cap or payee policy. Static finding on the ordinary client; assess ZK clients individually.
+
+Claude: reject incompatible terms before signing; select a fully compatible entry if offered. Add a controlled 402 test with an approved vendor, mismatched asset then network, asserting zero balance delta and zero payment calls. Review cross-origin redirects on the retry carrying X-PAYMENT/receipt_secret; require a test before claiming exposure. Also report behavior when settlement succeeded but the HTTP 200 was lost before the client received it.
+Codex independent verification (7 Nov, WSL sandbox): offer_selection 5/5 and receipt_theft 1/1 passed with cargo test --locked. CX-01, cross-origin proof forwarding and observer-only redemption are closed for the tested paths. Paid-but-lost HTTP response remains unrecovered; the agent reports log ID and tx hash and warns against paying again.
