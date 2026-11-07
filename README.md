@@ -4,7 +4,7 @@ A spend-policy wallet for AI agents that pay x402 APIs, settled on NEAR. Built a
 
 Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every attempt the policy blocks lands in an on-chain audit log. A call that reverts, such as malformed input or an already frozen agent, writes nothing.
 
-> **Status (7 Nov 2026):** runs end to end on a local NEAR sandbox. On testnet the contracts are deployed, but the payment flow has not run there yet ([plan](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
+> **Status (7 Nov 2026):** runs end to end on a local NEAR sandbox, and the ZK demo has run once on testnet with a mock token ([transactions below](#on-testnet), [details](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
 
 ## Try the private policy (no accounts, no funds)
 
@@ -31,6 +31,16 @@ It starts a clean local NEAR sandbox, and exits non-zero if any outcome differs 
 Add `--serve` to keep the public dashboard running at http://127.0.0.1:8402/. It shows payments and rejections, but no limits and no list of allowed vendors.
 
 Against contracts already deployed, finance runs `zk-setup` and the agent runs `scripts/demo-zk.sh --network testnet`. That mode checks the deployment before spending anything, and never prints the policy. See [docs/testnet.md](docs/testnet.md).
+
+### On testnet
+
+One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The contract is not locked yet.
+
+| Step | Result | Transaction |
+| --- | --- | --- |
+| Agent pays the vendor 0.05 mUSDC, 41.42 Tgas | Proof verified, then one token transfer. Log #0 `Paid` | [`ErMc9bfw…`](https://testnet.nearblocks.io/txns/ErMc9bfwTJSTQXDtf1c7QM73vUHESQN8DR8KvSucFMw5) |
+| Agent proves for the attacker anyway | `invalid proof`, no token transfer. Log #1 `Blocked` | [`7Jq2vy4w…`](https://testnet.nearblocks.io/txns/7Jq2vy4wy5qAdn86oWf7PThmi4mu4dbeaJKLSLvK6Nx7) |
+| Agent sends a valid proof to the attacker | `invalid proof`, no token transfer. Log #2 `Blocked` | [`4P8DhKWG…`](https://testnet.nearblocks.io/txns/4P8DhKWGm46FEvp2SdSR3uuNg8hxU63kVhH5CmFL3Cti) |
 
 **What stays public:** the recipient and amount of every payment, and of every rejected attempt. A paid vendor is visibly allowed, and a day's payments are a lower bound on the cap. A compromised agent can read the policy, because it must hold it to prove. The trusted setup is local, so it is not production-safe.
 
@@ -237,7 +247,7 @@ Run one facilitator instance only: its redemption store is atomic within a singl
 - [x] Groth16 verifier spike: 35.26 Tgas on a local sandbox.
 - [x] ZK proof of policy compliance (Option C) on a local sandbox, about 41 Tgas per payment. Vendor and amount stay public.
 - [x] ZK mode in its own demo and the dashboard, on a local sandbox.
-- [ ] Testnet: contracts are deployed. Still to do: the private-mode setup, a full run, and addresses and example transaction hashes in this README.
+- [x] Testnet: contracts deployed, private-mode setup done, and one full ZK demo run, about 41 Tgas per payment. Mock token, contract not locked.
 - [ ] Encrypted audit log readable by the owner (Option A).
 
 ## Baseline disclosure

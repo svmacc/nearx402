@@ -1,15 +1,23 @@
 # Testnet plan
 
-Status: 7 Nov 2026. **The wallet is funded and the private policy is on testnet, but the demo has not run there.** Read from the chain at final with view calls:
+Status: 7 Nov 2026. **The demo ran once on testnet and its checks passed.** The contract is not locked, and the vendor and facilitator ran on a local machine talking to testnet. Read from the chain at final with view calls:
 
 | Item | State on testnet |
 | --- | --- |
-| Accounts | All six exist. The agent has two keys, listed below. The other five each have one full-access key |
+| Accounts | All six exist. The agent has one limited key, listed below. The other five each have one full-access key |
 | `nearx402-policy.testnet` | Deployed and initialised, code hash `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`, the same as the local build. Owner `nearx402-finance.testnet`, token `nearx402-musdc.testnet`. **Not locked** |
 | `nearx402-musdc.testnet` | Deployed, code hash `HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g`. Total supply 20.00 mUSDC |
-| Wallet and log | Policy holds 10.00 mUSDC, finance holds 10.00. Log empty. Vendor and outside recipient are registered with 0 |
-| Private policy | Verifying key and ZK agent are on chain, with commitments equal to the setup files. Breaker 0 of 5, not frozen. The values stay in `.zx402/testnet`, which git ignores |
-| Agent's keys | `ed25519:HNf59MA29Fb7N4adwkmWfDMqsaGP76avN9a3ydfnPnKY`, limited to `pay_zk` with 1 NEAR allowance. `ed25519:FEZ9wcSxJQeZmWC6b4SX9PdSVL3sBr4HFsGaEDUuQusX`, **still full-access, so `demo-zk` refuses to run** |
+| Wallet and log | Policy holds 9.95 mUSDC, finance 10.00, the vendor 0.05, the outside recipient 0. Log: one paid entry, two blocked |
+| Private policy | Verifying key and ZK agent are on chain. Breaker 2 of 5 on 7 Nov UTC, not frozen. The values stay in `.zx402/testnet`, which git ignores |
+| Agent's key | Only `ed25519:HNf59MA29Fb7N4adwkmWfDMqsaGP76avN9a3ydfnPnKY`, limited to `pay_zk` on the policy. Allowance 0.98873 of 1 NEAR left after three calls. The full-access key was deleted, which cannot be undone |
+
+Demo transactions, signed by the limited key, each `FINAL` with no failed receipt:
+
+| Step | Result | Gas | Transaction |
+| --- | --- | --- | --- |
+| Pay the vendor 0.05 mUSDC | Paid, log #0, one token transfer | 41.42 Tgas | `ErMc9bfwTJSTQXDtf1c7QM73vUHESQN8DR8KvSucFMw5` |
+| Attempt A: prove with the attacker named | Blocked, `invalid proof`, log #1, no token transfer | 36.18 Tgas | `7Jq2vy4wy5qAdn86oWf7PThmi4mu4dbeaJKLSLvK6Nx7` |
+| Attempt B: a valid proof sent to the attacker | Blocked, `invalid proof`, log #2, no token transfer | 36.21 Tgas | `4P8DhKWGm46FEvp2SdSR3uuNg8hxU63kVhH5CmFL3Cti` |
 
 Setup transactions, each `FINAL` with no failed receipt:
 
@@ -23,8 +31,9 @@ Setup transactions, each `FINAL` with no failed receipt:
 | `set_zk_verifying_key` | finance | `Fy85xJD94NMyrR5gSqWWmvtUu9tMAs5x2R1n3efetbr1` |
 | `set_zk_agent` | finance | `2BcKKd88i2vcUJp5P7UBDrw2kzwnCzA4LKNUJ9BYAFig` |
 | Add the limited key | agent | `41pFmNZPPd1aBsLDhmkiU2NnWrTfCoVuqWaMu2Dhs54o` |
+| Delete the full-access key | agent | `99fRG77vFks3SakUPvwk3t9mqpZqw3Y6QwVx2Qe4gdFY` |
 
-Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Done so far: steps 1 to 6, step 8, and the first half of step 7. **Still to do: deleting the agent's full-access key, then steps 9 and 10.** Pushing and any further transaction wait for Steven's approval.
+Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Done so far: steps 1 to 9. **Still to do: step 10, the locking decision.** Pushing and any further transaction wait for Steven's approval.
 
 Finance's setup and the agent's wallet are on one machine for this demo, so step 6's warning about who ran the setup is not met here.
 
@@ -32,11 +41,12 @@ What has been checked, and how:
 
 | Part | How far it was checked |
 | --- | --- |
-| Steps 6, 8 and 9: `zk-setup` and `demo-zk --network testnet` | Run as separate processes against a **local sandbox** by `crates/nearx402/tests/zk_separate_runs.rs`. On testnet, only `zk-setup` has run |
-| `near` commands in steps 5, 6 and 7 | **Executed on testnet**, except `delete-keys` |
-| `near` commands in steps 7 and 10 that delete keys | Their subcommands were checked against `near` 0.31.1's `--help`. **Not executed.** Whether the deploy used the commands in steps 2 to 4 is not known |
-| The limited key's file | Loads with the call `demo-zk` uses and reports the same public key as the chain. It has not signed anything yet |
-| Testnet's RPC, gas and timing | Gas for the setup transactions only. Payments are not checked. See the end of this page |
+| Steps 6, 8 and 9: `zk-setup` and `demo-zk --network testnet` | Run as separate processes against a **local sandbox** by `crates/nearx402/tests/zk_separate_runs.rs`, and once on testnet |
+| `near` commands in steps 5, 6 and 7 | **Executed on testnet** |
+| `near` command in step 10 | Its subcommand was checked against `near` 0.31.1's `--help`. **Not executed.** Whether the deploy used the commands in steps 2 to 4 is not known |
+| The limited key | Signed all three demo transactions on testnet |
+| HTTP 200, the rebuilt receipt and the replay | Reported by the demo run on the local vendor. A chain read cannot confirm these. The payment behind them is on chain |
+| Testnet's RPC, gas and timing | One run only. See the end of this page |
 
 Testnet-only entries are eligible on every track (Q-010 in the official `HACKATHON.md`), and testnet NEAR is free (Q-008).
 
@@ -204,11 +214,16 @@ cargo run -q -p nearx402 --bin zk-setup --profile prover -- recover --dir .zx402
 
 Then send `finance/set_zk_agent.json` as in step 6. The wallet adopts the new state on its next run. This **resets the day's spending**, and sets the breaker limit back to the default unless you add it to the file again.
 
-## What must be re-verified on testnet
+## What one testnet run showed
 
-- Gas per payment: 41 Tgas on the sandbox.
-- Time per payment: the sandbox's 1.2 s will be longer.
-- That a transaction is final before the facilitator accepts it. Its `FINAL` wait has only run against a sandbox.
-- That the RPC endpoint allows `view_state` on the policy contract, which scene 3 reads, and allows the demo's request rate.
-- The `delete-keys` commands in steps 7 and 10.
+- Gas per payment: 41.42 Tgas, against 41 on the sandbox. A blocked attempt: about 36.2 Tgas.
+- Allowance: three calls used 0.01127 NEAR, about 0.0038 each.
+- `https://rpc.testnet.near.org` allowed `view_state` on the policy contract, which scene 3 reads, and the demo's request rate for one run.
+- The facilitator's `FINAL` wait worked on testnet in this run, and each transaction later read back as `FINAL`.
+- A substring search of the three transactions and their logs found no salt and no hidden vendor. Short integers cannot be shown absent this way, because their digits can appear by chance inside unrelated public numbers.
+
+## What must still be verified on testnet
+
+- Time per payment: not measured separately. The sandbox's figure is 1.2 s.
+- The `delete-keys` command in step 10.
 - The dashboard, using `?policy=<id>&rpc=<url>&symbol=mUSDC`. The transaction column stays empty there, because the hash list only exists in a demo run.

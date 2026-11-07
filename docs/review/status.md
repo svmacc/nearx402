@@ -27,6 +27,23 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 
+## Testnet demo: one run, for Codex's verification (7 Nov 2026)
+
+**Status: run by Claude and read back from the chain by a separate script. Codex has not verified it.** Steven approved deleting the agent's full-access key. Hashes are in [docs/testnet.md](../testnet.md). Commit `1520c3e`, `demo-zk` exit 0.
+
+| Check | Result |
+| --- | --- |
+| Deleted key | `ed25519:FEZ9wcSxJQeZmWC6b4SX9PdSVL3sBr4HFsGaEDUuQusX`, transaction `99fRG77vFks3SakUPvwk3t9mqpZqw3Y6QwVx2Qe4gdFY`, `FINAL`. Only the limited key remains |
+| Payment | `FINAL`, `SuccessValue`, 0 failed receipts, one token transfer. Log #0 `Paid`, 50000 base units to the vendor |
+| Attempts A and B | Both `FINAL`, 0 failed receipts, 0 token transfers. Log #1 and #2 `Blocked`, `invalid proof`, recipient the outside account. The transaction itself succeeds because a block is recorded, not reverted |
+| Token balances, base units | Finance 10000000, policy 9950000, vendor 50000, outside recipient 0, agent 0. Supply 20000000. Policy `get_balance` 9950000 |
+| Breaker | 2 of 5, not frozen |
+| HTTP 200, rebuilt receipt 402, replay 402 | **The demo's own output only.** The local vendor is not on chain |
+| Private values in the demo output | 0 matches, checked before the output was shown |
+| Private values in the three transactions and logs | No salt, no hidden vendor. Short integers cannot be shown absent by substring search |
+
+**Limits:** one run. The contract is not locked. Finance's setup and the agent's wallet are on one machine. The four open ZK audit items stay open. The proving key's randomness was on this machine, so this run does not show that the setup is trustworthy.
+
 ## Testnet setup: Codex's review of `6f44a18` (7 Nov 2026)
 
 **Status: the setup matches the report. The demo has not run on testnet.** Hashes are in [docs/testnet.md](../testnet.md). Codex checked these independently through RPC:
