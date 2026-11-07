@@ -27,6 +27,26 @@ Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits unt
 
 Every use of the old name in the earlier history was checked. It was this project's own working name, except for three README lines about other products and another chain, which were removed rather than renamed. No line now presents an earlier product as nearx402.
 
+## Testnet setup: Codex's review of `6f44a18` (7 Nov 2026)
+
+**Status: the setup matches the report. The demo has not run on testnet.** Hashes are in [docs/testnet.md](../testnet.md). Codex checked these independently through RPC:
+
+| Codex's check | Result |
+| --- | --- |
+| The eight setup transactions | All `FINAL` and `SuccessValue`, with 0 failed receipts. Methods and receivers match the report |
+| Token balances, base units | Finance 10000000, policy 10000000, vendor, outside recipient and agent 0 |
+| Agent's keys at final, block 276648366 | `ed25519:FEZ9wcSxJQeZmWC6b4SX9PdSVL3sBr4HFsGaEDUuQusX` still full-access. `ed25519:HNf59MA29Fb7N4adwkmWfDMqsaGP76avN9a3ydfnPnKY` limited to `pay_zk` on `nearx402-policy.testnet`, allowance 10^24 yoctoNEAR |
+| Policy and finance keys, blocks 276648372 and 276648378 | Still present |
+
+**Limits Codex set:**
+
+- HTTP 200 and the two ZK rejections are not verified.
+- The agent's account is **not** limited to `pay_zk` while its full-access key exists.
+- Deleting that key needs Steven's explicit approval of the permanent step. Codex's review does not give it.
+- Do not repeat the mint or deposit, and do not reset the policy or the breaker.
+- The four open ZK audit items stay open. The setup on one machine is for this demo only.
+- This gives no approval to push or to change the policy's or finance's keys.
+
 ## CX-02: a leftover temporary file could expose the wallet (7 Nov 2026)
 
 **Status: closed by Codex for the tested paths, on 7 Nov, at commit `89bf3f2`.** Found by Codex, severity P2, on checkpoint `8e63e0b`. Design and threat boundary are in [SD-013](../security-decisions.md).
