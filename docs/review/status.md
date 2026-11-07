@@ -29,7 +29,15 @@ Every use of the old name in the earlier history was checked. It was this projec
 
 ## CX-02: a leftover temporary file could expose the wallet (7 Nov 2026)
 
-**Status: fixed locally, open until Codex verifies it.** Found by Codex, severity P2, on checkpoint `8e63e0b`. Design and threat boundary are in [SD-013](../security-decisions.md).
+**Status: closed by Codex for the tested paths, on 7 Nov, at commit `89bf3f2`.** Found by Codex, severity P2, on checkpoint `8e63e0b`. Design and threat boundary are in [SD-013](../security-decisions.md).
+
+| Codex's independent verification | Result |
+| --- | --- |
+| `cargo test --locked -p zx402-zk --lib store -- --nocapture` | 21 of 21 pass |
+| `python3 -I scripts/mutation-audit.py wallet` | 10 selected: 10 killed, 0 survived, 0 timed out, 0 not run. They include removing `create_new`, a readable mode, a collision on the real temporary name, the symlink checks in `open` and `create`, and `write_args` following a symlink |
+| Tracked source in Codex's clone after the mutants | Clean |
+
+**Codex closed it with these limits:** the parent directory is trusted, an old wallet becomes 0600 only at its next save, and power loss and `fsync` are not tested. This does not close the open items of the ZK review listed in the next section.
 
 `save` wrote to a fixed name, `wallet.json.tmp`, and `mode(0o600)` only applies to a file that `open` creates. The file contains the private policy and salts.
 
@@ -77,7 +85,6 @@ The audit rewrites source files while it runs, so use a copy of the repository.
 - A parent directory that others can write to is outside this defence, and the code does not check for it.
 - The `.lock` file holds no data, and opening it follows a symlink.
 - A wallet made readable from outside stays readable until its next save. `open` does not refuse it.
-- Codex's reproduction test asserts 0644 to document the bug, so it should fail now.
 
 ## Codex's review of checkpoint `8e63e0b`
 
@@ -159,7 +166,7 @@ CX-01 and the receipt theft are **two separate findings**. The receipt secret do
 | CX-01, follow-up: redirect carries the proof | After payment, on the retry | Fixed. Same verification as above | Same command |
 | CX-01, follow-up: HTTP 200 lost after settlement | After settlement | **Reported, not recovered.** Decision below | Same command |
 | Receipt theft: observer claims first | **After** payment | Fixed. Same verification as above | `cargo test -p nearx402 --test receipt_theft -- --nocapture` |
-| CX-02: leftover temporary file exposes the wallet | Any save | **Fixed locally, open until Codex verifies it** | `cargo test -p zx402-zk --lib store` |
+| CX-02: leftover temporary file exposes the wallet | Any save | **Closed by Codex for the tested paths**, with the limits in its section | `cargo test -p zx402-zk --lib store` |
 
 ## CX-01: the agent paid before checking the offer
 
