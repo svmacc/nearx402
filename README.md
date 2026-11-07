@@ -246,7 +246,7 @@ Everything in this repository was written during NEAR HACKATHON 2026.
 
 ## Tools and libraries
 
-near-sdk, near-contract-standards, near-api, near-sandbox, arkworks (off-chain proving and tests only), axum, reqwest and tokio. Code was written with help from Claude Code (Anthropic) and reviewed with Codex (OpenAI).
+near-sdk, near-contract-standards, near-api, near-sandbox, arkworks (off-chain proving and tests only), axum, reqwest, tokio, clap, serde, serde_json, sha2, base64, bs58, rand, rand_chacha and anyhow. Contracts are built with cargo-near. Code was written with help from Claude Code (Anthropic) and reviewed with Codex (OpenAI).
 
 ## License
 
