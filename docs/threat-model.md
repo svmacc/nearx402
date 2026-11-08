@@ -17,7 +17,7 @@ Status: 6 Nov 2026. Covers v0.2 and Option C (`pay_zk`) as built, on a local san
 | Agent | Function-call key limited to the policy contract; for Option C also the policy opening and state secrets | Nothing | Be fully compromised: chosen inputs, arbitrary proofs, retries, overlapping calls |
 | Vendor | API key for the facilitator, HMAC nonce secret | Its own pricing | Replay receipts, overcharge in its 402 response up to the per-call limit |
 | Facilitator | Vendor API keys, redemption store | Honest verification for its vendors | See every payment for its vendors |
-| Policy contract | USDC balance, policy, log | Enforcing rules | Locked: no access keys, so code cannot change after deployment |
+| Policy contract | USDC balance, policy, log | Enforcing rules | Locked in the sandbox demos: no access keys, so code cannot change after deployment. **On testnet, mutable by Steven's choice on 8 Nov:** whoever holds its full-access key can replace the code, and must be trusted |
 | Token contract | Balances | Correct NEP-141 behaviour, identified by account id | Fail a transfer |
 | Chain observer | Everything public | Nothing | Read all arguments, events, and storage |
 

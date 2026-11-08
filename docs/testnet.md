@@ -1,10 +1,12 @@
 # Testnet plan
 
-Status: 7 Nov 2026. **The demo ran once on testnet and its checks passed, on the build below.** The contract is not locked, and the vendor and facilitator ran on a local machine talking to testnet.
+Status: 8 Nov 2026. **The demo ran once on testnet and its checks passed, on the build below.** The vendor and facilitator ran on a local machine talking to testnet.
 
-**The source is now ahead of testnet.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. So `demo-zk` refuses to run against testnet until the redeploy described under [Next steps](#next-steps).
+**The testnet contract is mutable, by Steven's choice on 8 Nov to delay the lock.** `nearx402-policy.testnet` keeps its full-access key. Whoever holds that key, the team, can deploy new code to the account, and new code can do anything the account can, including moving the tokens it holds. So on testnet, the spend policy holds against the agent, but trusting it also means trusting the key holder not to replace the code. The policy's own rules, such as owner-only methods, do not limit a code change. Locking is not a planned step. It would need a new, separate decision from Steven.
 
-Read from the chain at final with view calls:
+**The source is ahead of the state recorded below.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. `demo-zk` refuses to run against a chain that holds another build. Codex is running the redeploy, if the hash differs, and the recorded demo, as the only operator of testnet transactions. This page records those transactions once Codex sends them.
+
+Read from the chain at final with view calls, on 7 Nov:
 
 | Item | State on testnet |
 | --- | --- |
@@ -41,15 +43,16 @@ Claude did not make these accounts or this deploy. Claude sent the transactions 
 
 ## Next steps
 
-Steven chose to add `reconcile_payment`, and then to lock. In this order, each with its own approval:
+On 8 Nov Steven chose to **delay the lock** and asked for the redeploy, if needed, tests, and a recorded demo. Codex runs these as the only transaction operator. Claude sends no testnet transaction meanwhile.
 
-| # | Step | Why here |
-| --- | --- | --- |
-| 1 | Codex reviews `reconcile_payment` | The contract cannot be fixed after locking |
-| 2 | Redeploy the policy in place, then read the state back | Keeps the verifying key, agent, log and funds. `scripts/upgrade-rehearsal.sh` rehearses this and going back on a sandbox. The old build can still be restored at this point |
-| 3 | Run the demo on the new build | Evidence for the code that will be locked. Each run uses 2 of the day's 5 blocked attempts |
-| 4 | Record the video | Before locking, so a problem found on camera can still be fixed |
-| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys. After this, each lost withdrawal callback leaves its amount reserved for good, and they add up, as [reserved-recovery.md](reserved-recovery.md) explains. Steven has not yet decided whether to accept that |
+| # | Step | Who | Why here |
+| --- | --- | --- | --- |
+| 1 | Independent review of `bb706b7` and its rehearsal | Codex | Before any deploy |
+| 2 | Redeploy the policy in place, only if the chain's code hash differs from the build's, then read the state back | Codex | Keeps the verifying key, agent, log and funds. `scripts/upgrade-rehearsal.sh` rehearses this and going back on a sandbox, and the old build can be restored while the key exists |
+| 3 | One recorded demo run on that build | Codex | Each run uses 2 of the UTC day's 5 blocked attempts |
+| 4 | Record the transactions on this page | Claude, from Codex's evidence | So every claim points at the chain |
+
+**No lock step follows.** The policy's full-access key stays. Deleting it would be permanent, and would need its own decision from Steven, with the withdrawal limit in [reserved-recovery.md](reserved-recovery.md) in view.
 
 ```bash
 near contract deploy nearx402-policy.testnet use-file res/policy.wasm without-init-call network-config testnet sign-with-legacy-keychain send
@@ -81,7 +84,7 @@ Testnet-only entries are eligible on every track (Q-010 in the official `HACKATH
 | 3 | Push the work | Push once you have read the change | Outward-facing |
 | 4 | Deploy | **Done before this decision was recorded.** Redeploy after any change to the contract, because `demo-zk` refuses to run if the chain holds another build | Outward-facing |
 | 5 | Breaker limit while recording | 20, through `max_blocked_per_day` in step 6. The default of 5 allows 2 runs per UTC day | A higher limit gives a compromised agent more attempts |
-| 6 | Locking the contract | Lock it last, after a good run and the recording. The README's security model assumes a locked contract | Permanent. A bug then means deploying to a new account |
+| 6 | Locking the contract | **Decided on 8 Nov: delay it.** The testnet contract stays mutable, and the README says whoever holds the policy's key must be trusted | Permanent if done. A bug then means deploying to a new account |
 | 7 | Recording or hosting | Record first, and host only if time remains. Hosting needs HTTPS on every hop, or the receipt secret travels in the clear (SD-014) | See "Still missing" |
 | 8 | Making the repo public | Last, and by the deadline of 14 Nov 23:59 UTC. The rules require it | Outward-facing |
 | 9 | The lost-response limit | Accept and document it (SD-015) | Product tradeoff |
@@ -218,9 +221,9 @@ scripts/demo-zk.sh --network testnet --config deploy/testnet.json
 
 Record the real transaction hashes in the README.
 
-**10. Decide about locking** (decision 6). The demo prints whether the contract still has an access key. To lock it, delete that key.
+**10. Locking: not planned** (decision 6). Steven chose on 8 Nov to keep the policy's key, so this step is not run. The demo prints whether the contract still has an access key. Only if Steven later decides to lock, and it is permanent, the command would be:
 
-```bash
+```text
 near account delete-keys nearx402-policy.testnet public-keys ed25519:THE_CONTRACT_KEY network-config testnet sign-with-legacy-keychain send
 ```
 
@@ -247,5 +250,5 @@ Then send `finance/set_zk_agent.json` as in step 6. The wallet adopts the new st
 ## What must still be verified on testnet
 
 - Time per payment: not measured separately. The sandbox's figure is 1.2 s.
-- The `delete-keys` command in step 10.
+- The `delete-keys` command in step 10, which is not planned to run.
 - The dashboard, using `?policy=<id>&rpc=<url>&symbol=mUSDC`. The transaction column stays empty there, because the hash list only exists in a demo run.

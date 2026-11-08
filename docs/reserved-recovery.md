@@ -1,6 +1,6 @@
 # Recovering `reserved` after a lost callback
 
-**Status: implemented locally, as `reconcile_payment`. Not deployed.** Codex challenged the first version, and this page records the result. Steven chose to add the method and then lock the contract ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)).
+**Status: implemented locally, as `reconcile_payment`. Not deployed.** Codex challenged the first version, and this page records the result. Steven chose to add the method, and on 8 Nov to delay the lock ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)).
 
 ## The problem
 
@@ -108,7 +108,7 @@ The new power is labelling a stuck entry. The owner already controls `withdraw`,
 
 ## What it does not cover: withdrawals
 
-**Steven's decision, not yet made.** Nothing below accepts the limit on Steven's behalf.
+**Steven's decision, 8 Nov 2026: delay the lock.** The policy's full-access key stays on testnet, so a lost callback, of a payment or a withdrawal, can still be fixed with new code. The limit below applies only if the contract is locked later, which would need a new decision.
 
 **Facts, from the code and from tests:**
 
@@ -134,7 +134,7 @@ If the callback of a withdrawal is lost after locking, then **that amount stays 
 | Delay the lock | Redeploy, but keep the policy's full-access key for now | Whoever holds that key can replace the code, so the claim that nobody can change the rules cannot be made. That is a trust assumption on the team. A lost callback could then be fixed with new code. The demo is the same |
 | Cover withdrawals first | A new state field for pending withdrawals, and a state migration | The control in the rehearsal shows a plain redeploy fails once a field is added, so this needs a migration method, new tests and a new review before a permanent step. Not started, as Codex asked |
 
-**Claude's recommendation: accept the limit with the operational rule, then lock.** Not because the chance is known to be small, but because the exposure is then bounded by what finance chooses to withdraw, finance can keep the wallet's balance low, and a migration adds untested risk just before a permanent step. Delaying the lock is a reasonable choice if Steven prefers recoverability to the no-key claim.
+Claude had recommended accepting the limit and locking. **Steven chose to delay the lock**, keeping recoverability at the cost of the no-key claim. The README and testnet.md now say the testnet contract is mutable and that its key holder must be trusted.
 
 ## Deployment
 

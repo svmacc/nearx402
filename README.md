@@ -4,7 +4,7 @@ A spend-policy wallet for AI agents that pay x402 APIs, settled on NEAR. Built a
 
 Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every attempt the policy blocks lands in an on-chain audit log. A call that reverts, such as malformed input or an already frozen agent, writes nothing.
 
-> **Status (7 Nov 2026):** runs end to end on a local NEAR sandbox, and the ZK demo has run once on testnet with a mock token ([transactions below](#on-testnet), [details](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
+> **Status (8 Nov 2026):** runs end to end on a local NEAR sandbox, and the ZK demo has run once on testnet with a mock token ([transactions below](#on-testnet), [details](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** **The testnet contract is mutable:** the team keeps its full-access key, so trusting it means trusting the team not to replace its code. Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
 
 ## Try the private policy (no accounts, no funds)
 
@@ -34,7 +34,9 @@ Against contracts already deployed, finance runs `zk-setup` and the agent runs `
 
 ### On testnet
 
-One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The contract is not locked yet. The current source adds `reconcile_payment`, which is not on testnet yet, so that run used the earlier build.
+One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The current source adds `reconcile_payment`, which was not on testnet then, so that run used the earlier build.
+
+**The contract is not locked, by choice.** On 8 Nov Steven chose to delay the lock and keep `nearx402-policy.testnet`'s full-access key, so a lost callback can still be fixed with new code ([why](docs/reserved-recovery.md#what-it-does-not-cover-withdrawals)). The cost is trust: whoever holds that key, the team, can deploy code that does anything the account can, including moving its tokens. As long as the code is not replaced, the agent cannot bypass the policy: its only key calls `pay_zk`.
 
 | Step | Result | Transaction |
 | --- | --- | --- |
@@ -103,7 +105,7 @@ sequenceDiagram
 - **Circuit breaker:** an agent's N-th blocked attempt of a UTC day freezes it (default N = 5; emits `agent_auto_frozen`). Further attempts that day panic, so they add nothing to the log. `set_frozen(agent, false)` unfreezes and resets the count.
 - **Recovering a plain `ft_transfer`:** tokens sent without `ft_transfer_call` are not seen by the contract. `sync_balance(max_amount)` reads the token balance and credits the surplus over what the contract has counted (including transfers in flight), at most `max_amount`. Pass exactly the amount you sent: the cap keeps a deposit that is still in flight from being counted twice. To be safe, do not run it while an `ft_transfer_call` deposit is still pending. If a payment or withdrawal resolves during the sync, nothing is credited and you can retry.
 - **Changing the breaker limit:** lowering `max_blocked_per_day` below the agent's blocked count for today freezes it immediately.
-- **Ownership transfer:** two steps, because the locked contract has no other way to change its owner. The owner calls `propose_owner(new)`, then the new account calls `accept_owner()`. A typo in the account id therefore cannot lock finance out.
+- **Ownership transfer:** two steps, because a locked contract has no other way to change its owner. The owner calls `propose_owner(new)`, then the new account calls `accept_owner()`. A typo in the account id therefore cannot lock finance out.
 - **Funding:** anyone can deposit with `usdc.ft_transfer_call(policy, amount, "")`. Other tokens are rejected.
 - **Agent:** `pay(vendor, amount, memo)`, with at least 50 Tgas attached.
   - Within policy: the payment is logged as `Pending`, and the contract calls `ft_transfer` to the vendor. A private callback then marks it `Paid`, or `Failed` with budget and balance restored.
@@ -167,7 +169,7 @@ Check 6 is needed because on NEAR, redeploying a contract keeps its storage. An 
 | A vendor's 402 asks for terms the payment cannot satisfy | The agent compares network, token, policy hash and resource with what the chain says about its own contract, before signing, and picks a compatible offer |
 | A redirect carries the proof and its secret to another origin | The paying client follows no redirects |
 | Someone burns a vendor's payment directly at the facilitator | `/verify` and `/settle` need the vendor's API key, which only covers that vendor's accounts |
-| Deployer changes the rules later | The sandbox demos delete the policy account's keys after deploy (locked contract); ownership moves only by `propose_owner` + `accept_owner`. **The testnet deployment is not locked yet** |
+| Deployer changes the rules later | The sandbox demos delete the policy account's keys after deploy (locked contract); ownership moves only by `propose_owner` + `accept_owner`. **On testnet this mitigation is not applied:** the contract is mutable by Steven's choice, and its key holder is trusted not to replace the code |
 | Dashboard proxy abused | `/rpc` forwards only read-only `query` calls |
 | Agent memo runs as a spreadsheet formula | The CSV export prefixes cells that start with `= + - @` |
 
@@ -250,7 +252,7 @@ Run one facilitator instance only: its redemption store is atomic within a singl
 - [x] Groth16 verifier spike: 35.26 Tgas on a local sandbox.
 - [x] ZK proof of policy compliance (Option C) on a local sandbox, about 41 Tgas per payment. Vendor and amount stay public.
 - [x] ZK mode in its own demo and the dashboard, on a local sandbox.
-- [x] Testnet: contracts deployed, private-mode setup done, and one full ZK demo run, about 41 Tgas per payment. Mock token, contract not locked.
+- [x] Testnet: contracts deployed, private-mode setup done, and one full ZK demo run, about 41 Tgas per payment. Mock token, and the contract stays mutable by choice.
 - [ ] Encrypted audit log readable by the owner (Option A).
 
 ## Baseline disclosure

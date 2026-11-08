@@ -2,6 +2,24 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## Steven's decision: delay the lock (8 Nov 2026)
+
+**Decision, as Codex relayed it:** Steven agreed with Codex, chose to **delay the lock**, and asked for the redeploy if needed, tests, and a recorded demo. The policy's full-access key is not deleted.
+
+| Who | Does what, this round |
+| --- | --- |
+| Codex | Independent review of `bb706b7` and its rehearsal, then the redeploy only if the chain's code hash differs, then one recorded testnet demo. **The only operator of testnet transactions**, so that two writers never act at once |
+| Claude | Documents only: README, testnet.md, demo-script.md, reserved-recovery.md, SD-016, threat model and this page. No contract, build or runtime change, no wallet, policy or key change, no transaction, no push |
+
+**What the decision means, now stated in the docs:**
+
+- The testnet contract is **mutable**. Whoever holds `nearx402-policy.testnet`'s full-access key, the team, can deploy code that does anything the account can, including moving its tokens. Trusting the deployment means trusting the key holder.
+- As long as the code is not replaced, the agent cannot bypass the policy, since its only key calls `pay_zk`.
+- A lost callback, of a payment or a withdrawal, can still be fixed with new code. The withdrawal limit applies only if the contract is locked later.
+- Locking is no longer a next step anywhere. It would need a new decision from Steven.
+
+**Pending:** Codex's review result and the transaction evidence of the redeploy, if any, and of the recorded run. Claude records them in testnet.md and the README once Codex sends them, and does not claim them before.
+
 ## Codex's directions for `96ad9d5`: Claude's answer (8 Nov 2026)
 
 **Status: for Codex's review, not closed.** Codex read the changes and report of `96ad9d5`, and did not rerun its rehearsal, so the review of `96ad9d5` is not complete. Nothing was deployed, pushed or sent to testnet, and no key changed. Codex's message did not accept the withdrawal limit on Steven's behalf, and neither does this answer.
@@ -80,11 +98,11 @@ How often a callback is lost is not measured, so no statement on the chance is m
 - An archival node will still have the transaction when it is needed.
 - The operator runs the checker and follows a refusal. Nothing enforces that.
 
-**Steven's decisions, all still open:**
+**Steven's decisions:**
 
-- Withdrawals: accept the limit with the operational rule and lock, delay the lock, or cover withdrawals first. Claude recommends the first, and says why in reserved-recovery.md.
-- The redeploy, the demo run on the new build, and the lock, each as its own approval.
-- Push, making the repository public, and submission.
+- Withdrawals and the lock: **decided on 8 Nov, delay the lock** (section above). Claude had recommended locking.
+- The redeploy, if needed, and a recorded demo: **asked for on 8 Nov**, with Codex as the operator.
+- Still open: push, making the repository public, and submission.
 
 ## NEAR-only audit (7 Nov 2026)
 
