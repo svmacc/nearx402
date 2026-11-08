@@ -207,9 +207,9 @@ scripts/build-contracts.sh
 cargo test --workspace
 ```
 
-208 tests pass as of 8 Nov 2026. Two more run on their own: the rehearsal, by `scripts/upgrade-rehearsal.sh`, and the capture of the checker's fixtures. They cover:
+210 tests pass as of 8 Nov 2026. Two more run on their own: the rehearsal, by `scripts/upgrade-rehearsal.sh`, and the capture of the checker's fixtures. They cover:
 - 98 unit tests for the policy contract (including the circuit breaker, `sync_balance`, `reconcile_payment`, lost withdrawal callbacks, and `pay_zk` with real proofs) and 2 for the token.
-- 35 tests in `crates/nearx402` for refusal diagnostics (including an RPC that answers 429), x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
+- 36 tests in `crates/nearx402` for refusal diagnostics (including an RPC that answers 429, and what of an RPC URL may be printed), x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
 - One sandbox end-to-end test of the public-limits flow. It runs the real contracts, vendor, facilitator and agent, and covers:
   - replay, a fake contract, a nonce from another resource, and double settlement;
   - 16 simultaneous redemptions of one payment, of which exactly one is served;
@@ -226,7 +226,8 @@ cargo test --workspace
   - `zk_double_spend`: two proofs from one state, sent together;
   - `zk_separate_runs`: finance and the agent as separate processes, crashes, and recovery;
   - `receipt_theft`: an observer rebuilding a proof from public data;
-  - `offer_selection` (5 tests): incompatible 402 offers, redirects, and a lost response, on both clients.
+  - `offer_selection` (5 tests): incompatible 402 offers, redirects, and a lost response, on both clients;
+  - `paid_not_served`: the `demo-zk` binary against a sandbox whose RPC rate-limits the facilitator's read. The run stops with the payment's log id, transaction and cause, pays nothing again, and prints no part of the RPC URL beyond its host.
 - One sandbox test, `reserved_recovery`, of closing a payment after a lost callback, from state patched into storage.
 - 14 tests of `reconcile-check`, the read-only check an operator runs before `reconcile_payment`: 13 against real transaction responses from a sandbox, edited one field at a time, and one that runs the binary against a sandbox.
 - One sandbox rehearsal, `upgrade_rehearsal`, of replacing the policy's code in place and going back, with no init call. It needs the old build, so `cargo test` skips it.

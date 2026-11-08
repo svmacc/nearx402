@@ -2,6 +2,31 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## Paid but not served, run end to end; the RPC URL in the demo's output (8 Nov 2026, after `3e047df`)
+
+**Status: for Codex's review, with `3e047df`. Off-chain tests and one printed line changed. No transaction was sent, no RPC call made to testnet, no key, wallet, policy or config touched, and the contract is unchanged at `6BA4L1mo…`.** Codex is rate limited at the moment, so Claude used the time on the limit `3e047df` stated: its paid-but-not-served path had not run end to end.
+
+**The 8 Nov recording, re-read:** `testnet-demo.log` and the cast hold no 402 body, so the cause stays unproven. The timing in the cast: the vendor's balance read at 63.6 s, so the RPC still answered then; the observer's 402 came 9.7 s later, and the agent's 3.6 s after that. A failing near-api read retries 5 times within about 0.3 s, so those gaps are not explained by retries alone. Nothing else can be read from the files.
+
+**New sandbox test, `crates/nearx402/tests/paid_not_served.rs`.** The real `demo-zk` binary, with `--network testnet --config`, runs against a local sandbox behind an RPC proxy. The proxy forwards everything except `query` calls of `get_log_entry`, which it answers 429. The demo itself never calls `get_log_entry`, so all of its own reads work, and only the facilitator's `/verify` fails, where the 8 Nov run is assumed to have failed. The proxy's URL carries credentials, a path and a query, like a paid RPC's.
+
+| Shown | How |
+| --- | --- |
+| The run stops, exit 1, with `paid but not served: paid on chain as log #0, transaction H, and the vendor refused the claim: HTTP 402, the facilitator's RPC is rate limiting (429): … Do not pay again; nothing was retried`, `H` being the hash the run printed | stderr |
+| The observer's refusal is read for its reason, and not taken as the secret check: `refused, but not for the secret: … This does not show the secret's protection` | stdout |
+| Nothing beyond scene 1 ran: no `HTTP 200`, no replay, no attempt, no scene 3 | stdout |
+| One payment: one new log entry, `Paid`, to the vendor, 0.05 mUSDC, with a memo. Vendor +0.05, policy -0.05, attacker 0. Breaker 0, not frozen, nothing in flight. The wallet file agrees with the chain and counted 0.05 once | chain and file, read after the run |
+| The URL's credentials, path and query, the receipt secret or any 64-hex value, and the private policy appear nowhere | stdout and stderr |
+| The facilitator read the log entry 10 times for 2 claims: near-api's 5 retries each. 22 other reads went through | the proxy's counters |
+
+**Found by the test, and fixed:** scene 0 printed the RPC URL from `deploy/testnet.json` in full, `chain testnet, through <url>`. A URL with an API key in its path or query would have gone into a recording. `demo-zk` now prints it through `rejection::public_url`, scheme and host only, with a unit test. `3e047df` redacted the facilitator's reasons but not this line. No other output changed.
+
+**Not changed:** the proof, nonce, TTL, replay and redemption checks, the payment path, the facilitator's checks, and the contract. Nothing retries. `deploy/testnet.json` and `.zx402/` were not read or written.
+
+**Also added, documents only:** [retake-runbook.md](retake-runbook.md), a checklist for Codex's retake, with the RPC reads one run makes, counted from the code; and two rows in [demo-script.md](../demo-script.md). The submission and X post drafts are in a file git ignores, for Steven.
+
+**Limits:** the test rate-limits one read, chosen so that only the facilitator fails. A rate limit on testnet hits the demo's own reads too, which fail with their own errors before or after this point; those paths are the ordinary `?` errors and are not exercised here. The 429 here comes from a proxy, not from `rpc.testnet.near.org`, whose exact wording is only known from the one line Codex saw. The timing figures above are read from the cast and show nothing about the cause.
+
 ## Paid but not served on testnet: diagnostic (8 Nov 2026)
 
 **Status: for Codex's review. Retake held by Codex until this is reviewed.** Claude changed off-chain runtime and tests only, sent no transaction, and made no RPC call to testnet, since Codex asked to stop polling `rpc.testnet.near.org` after it answered 429.

@@ -1,6 +1,6 @@
 # Three-minute demo script
 
-Draft, 8 Nov 2026. Codex runs the recorded testnet demo as the only transaction operator, so no recording from this page exists yet. The narration is about 330 words, which fits three minutes with pauses. Check every number against the recorded run before publishing, and change the narration where they differ.
+Draft, 8 Nov 2026. Codex runs the recorded testnet demo as the only transaction operator. The first recording, on 8 Nov, failed at the agent's claim after the payment ([testnet.md](testnet.md)), so no usable recording exists yet; the retake follows the [retake runbook](review/retake-runbook.md). The narration is about 330 words, which fits three minutes with pauses. Check every number against the recorded run before publishing, and change the narration where they differ.
 
 ## Narration
 
@@ -21,6 +21,8 @@ Draft, 8 Nov 2026. Codex runs the recorded testnet demo as the only transaction 
 | The chain holds the build being shown | `demo-zk` refuses to run otherwise. Codex redeploys only if the code hash differs |
 | Breaker budget for that UTC day | Each run makes 2 blocked attempts, and the default limit is 5. `demo-zk` refuses a run that would trip the breaker |
 | The run uses the current fixture | The 7 Nov run's output shows the old sample body. Do not reuse that footage |
+| The RPC can carry the run | About 40 reads and 3 transactions per run, with the facilitator's reads on the same URL. The 8 Nov run was refused at the claim, cause unknown. The runbook lists the reads and what each failure prints |
+| Scene 1 says why each 402 happened | The observer's line must end `the secret does not match`, and the replay's `already redeemed`. Any other reason means the take does not show that check, and the run says so |
 | Open the explorer link for each new transaction | The links have not been opened in a browser yet |
 | Dashboard | `--serve` has not run against testnet. Test it first, or leave it out |
 

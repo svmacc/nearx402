@@ -333,7 +333,11 @@ async fn deployed_stage(ui: &Ui, path: &Path) -> Result<Stage> {
     let client = PolicyClient::new(network.clone(), cfg.policy.clone());
 
     ui.scene(0, "Checking the deployment before spending anything");
-    ui.line("chain", &format!("{chain}, through {}", cfg.rpc_url));
+    // Scheme and host only: a recording must not show an API key in the URL.
+    ui.line(
+        "chain",
+        &format!("{chain}, through {}", rejection::public_url(&cfg.rpc_url)),
+    );
 
     let wasm = std::fs::read(&cfg.policy_wasm)
         .with_context(|| format!("read {}", cfg.policy_wasm.display()))?;

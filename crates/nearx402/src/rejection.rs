@@ -177,6 +177,12 @@ pub fn redact(text: &str, secrets: &[&str]) -> String {
     }
 }
 
+/// A URL as it may be printed or recorded: scheme and host only. An RPC URL
+/// can carry an API key in its path, query or credentials.
+pub fn public_url(url: &str) -> String {
+    strip_url(url.trim())
+}
+
 /// `https://user:key@host:port/path?query` becomes `https://host:port`, keeping
 /// any characters before the scheme and closing punctuation after the URL.
 fn strip_url(word: &str) -> String {
@@ -328,6 +334,23 @@ mod tests {
         );
         assert!(r.detail.contains("(http://10.0.0.1)."), "{}", r.detail);
         assert!(r.detail.contains("nonce [hex]"), "{}", r.detail);
+    }
+
+    #[test]
+    fn a_public_url_keeps_only_its_scheme_and_host() {
+        assert_eq!(
+            public_url("https://user:pw@rpc.example.com:8443/v1/key/abc?apiKey=SECRET"),
+            "https://rpc.example.com:8443"
+        );
+        assert_eq!(
+            public_url("https://rpc.testnet.near.org"),
+            "https://rpc.testnet.near.org"
+        );
+        assert_eq!(
+            public_url("http://127.0.0.1:3030/"),
+            "http://127.0.0.1:3030"
+        );
+        assert_eq!(public_url("not a url"), "not a url");
     }
 
     #[test]
