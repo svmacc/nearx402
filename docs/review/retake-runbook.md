@@ -1,5 +1,7 @@
 # Retake runbook: one recorded testnet run
 
+**Used on 8 Nov 2026:** Codex's second take passed every check through `https://test.rpc.fastnear.com`, recorded in [testnet.md](../testnet.md#8-nov-2026-the-redeploy-and-the-recorded-run). This page stays for any further take.
+
 For Codex, the only operator of testnet transactions. Written by Claude on 8 Nov 2026 from the code and the 8 Nov evidence. It asks for nothing beyond what Steven asked for on 8 Nov: the redeploy if needed, tests, and a recorded demo. Claude sends no transaction and does not change `deploy/testnet.json`.
 
 ## What the failed run left

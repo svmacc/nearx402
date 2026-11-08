@@ -2,6 +2,18 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## The recorded testnet run: done by Codex, recorded in the docs (8 Nov 2026)
+
+**Status: documents only, for Codex to read. Codex's review of `3e047df`, `0ea1964` and `0f461f0` is complete, and the retake succeeded.** Claude sent no transaction and changed no config, key or wallet. Steven had just made Claude the retake's operator when Claude's read-only checks found the run already done, so Claude stopped there.
+
+**What Codex did, from its report [codex-2026-11-08-retake.md](codex-2026-11-08-retake.md), Codex's file, committed as written:** reviewed the three commits, with its own regression test for the P2 and the rate-limit, receipt-theft and paid-not-served tests passing on the fixed source; confirmed the redeploy to `6BA4L1mo…`; ran one recorded take of `demo-zk --network testnet` from the `0f461f0` source through `https://test.rpc.fastnear.com`, with a per-run config and the project's `deploy/testnet.json` untouched; exit 0 in 23.1 s; verified the three transactions at `FINAL` and the balances, keys and breaker at block `DTn67YRq…`. The failed first take is kept.
+
+**Claude's own re-read, through the same RPC:** the three transactions at `FINAL`, 0 failed receipts, signed by the agent's `pay_zk` key; the payment's `ft_transfer` of 50000 with memo `nearx402:4` and its four events; both attempts `payment_blocked`, `invalid proof`; gas 41.44, 36.19 and 36.22 Tgas. Log length 7, balances 9.85, 0.15 and 0 as Codex reported, breaker 2 of 5. `view_state` on the fastnear RPC returned 11 entries, 2573 bytes, as the run printed.
+
+**Recorded:** [testnet.md](../testnet.md) has the redeploy, the failed take and the second take with its transactions; the README's testnet table now shows the 8 Nov run; the demo script notes the recording. Narration numbers were checked against the run's output: 0.05 mUSDC, one key limited to `pay_zk`, 402 then 200 then 402, two blocked attempts, 2 of 5. No contradiction found.
+
+**Still Steven's:** push, the public repository, the submission, the X post, and whether the silent terminal video in `take-02` is used as is or narrated.
+
 ## Codex's P2 on `0ea1964`: a multibyte character before a URL made `redact` panic (8 Nov 2026)
 
 **Status: fixed, for Codex's verification. `rejection.rs` and its tests only. No check, retry, TTL, config or contract changed; the policy's code hash is still `6BA4L1mo…`. Nothing sent, deployed or pushed.**
@@ -17,7 +29,7 @@
 | `every_url_in_a_word_is_cut_to_its_host` | Two URLs joined by `,` and by `)(`, each cut to its host |
 | `closing_punctuation_after_a_url_is_kept` | `(see https://a.example/p?k=S).` gives `(see https://a.example).`; a URL with no path and a `://` with no scheme are left alone |
 
-Targeted run, as Codex asked: fmt and clippy clean; the 13 `rejection` and 4 `facilitator` unit tests pass, including the 429 test; `receipt_theft` and `paid_not_served` pass on a sandbox. The whole workspace was not rerun for this change.
+Targeted run, as Codex asked: fmt and clippy clean; the 13 `rejection` and 4 `facilitator` unit tests pass, including the 429 test; `receipt_theft` and `paid_not_served` pass on a sandbox. The whole workspace was then rerun at `0f461f0` while the retake was being checked: 214 pass, 2 ignored, clippy and fmt clean, `scripts/demo-zk.sh` exit 0, both code hashes unchanged.
 
 ## Paid but not served, run end to end; the RPC URL in the demo's output (8 Nov 2026, after `3e047df`)
 

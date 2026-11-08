@@ -1,12 +1,12 @@
 # Testnet plan
 
-Status: 8 Nov 2026. **The demo ran once on testnet and its checks passed, on the build below.** The vendor and facilitator ran on a local machine talking to testnet.
+Status: 8 Nov 2026. **The demo has run twice on testnet with every check passing: on 7 Nov on the earlier build, and on 8 Nov on the current build, recorded.** The vendor and facilitator ran on a local machine talking to testnet. The 8 Nov redeploy, the recorded run and its verification were done by Codex, as the reviewer and the only operator of testnet transactions that day; Claude re-read the three transactions from the chain and recorded them here.
 
 **The testnet contract is mutable, by Steven's choice on 8 Nov to delay the lock.** `nearx402-policy.testnet` keeps its full-access key. Whoever holds that key, the team, can deploy new code to the account, and new code can do anything the account can, including moving the tokens it holds. So on testnet, the spend policy holds against the agent, but trusting it also means trusting the key holder not to replace the code. The policy's own rules, such as owner-only methods, do not limit a code change. Locking is not a planned step. It would need a new, separate decision from Steven.
 
-**The source is ahead of the state recorded below.** It adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)), with local code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. `demo-zk` refuses to run against a chain that holds another build. Codex is running the redeploy, if the hash differs, and the recorded demo, as the only operator of testnet transactions. This page records those transactions once Codex sends them.
+**The chain holds the current build.** On 8 Nov Codex redeployed `nearx402-policy.testnet` in place, with no init call, from `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU` to `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`, the build that adds `reconcile_payment` ([SD-016](security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim)). See [the 8 Nov section](#8-nov-2026-the-redeploy-and-the-recorded-run). `demo-zk` refuses to run against a chain that holds another build.
 
-Read from the chain at final with view calls, on 7 Nov:
+Read from the chain at final with view calls, on 7 Nov, before the redeploy:
 
 | Item | State on testnet |
 | --- | --- |
@@ -39,30 +39,35 @@ Setup transactions, each `FINAL` with no failed receipt:
 | Add the limited key | agent | `41pFmNZPPd1aBsLDhmkiU2NnWrTfCoVuqWaMu2Dhs54o` |
 | Delete the full-access key | agent | `99fRG77vFks3SakUPvwk3t9mqpZqw3Y6QwVx2Qe4gdFY` |
 
-Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Done so far: steps 1 to 9, on the earlier build. Pushing and any further transaction wait for Steven's approval.
+Claude did not make these accounts or this deploy. Claude sent the transactions above on Steven's approval. Pushing and any further transaction wait for Steven's approval.
 
-## Next steps
+## 8 Nov 2026: the redeploy and the recorded run
 
-**Reported by Codex on 8 Nov, not re-read by Claude:**
+On 8 Nov Steven chose to **delay the lock** and asked for the redeploy, if needed, tests, and a recorded demo. Codex did all three as the only operator of testnet transactions, after its independent review of `bb706b7`, `3e047df`, `0ea1964` and `0f461f0`. Codex's report is [review/codex-2026-11-08-retake.md](review/codex-2026-11-08-retake.md); its `verification.json` and each transaction's JSON are in the recording folder outside the repository. Claude re-read the three demo transactions at `FINAL` through `https://test.rpc.fastnear.com` and recorded them here.
 
 | Step | Result | Transaction |
 | --- | --- | --- |
-| Codex's independent rerun of `bb706b7` | 22 reconcile unit tests, 14 checker tests, and the upgrade and rollback rehearsal pass | None |
-| Redeploy of the policy, no init | Code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. All storage, nine views, token balances and the agent's key identical before and after. The policy's key kept | `AWpxaYA7xVnw8Y2WXhY1fkQD7Q6f3KNv3cwLayGaDCVU` |
-| Recorded demo run | **Failed, exit 1 after 76.9 s.** The payment of 0.05 mUSDC succeeded as log #3, and the vendor went from 0.05 to 0.10. The observer got 402, and **so did the agent's own claim**. The demo discarded the 402 body, so the reason is not known | `5txs2D6S8jXhguVRfiwBrZxXc2kvvM21gmgEGQsJVq1s` |
+| Redeploy of the policy in place, no init call | Code hash `CXerHAq8…` to `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. Codex compared every storage key and value, nine views, token balances and the agent's key before and after: identical. The policy's key stays, so the contract is still mutable | `AWpxaYA7xVnw8Y2WXhY1fkQD7Q6f3KNv3cwLayGaDCVU` |
+| First take, through `rpc.testnet.near.org` | **Failed, exit 1 after 76.9 s.** The payment settled as log #3 and the vendor went from 0.05 to 0.10 mUSDC, but the observer's claim and the agent's own claim both got 402, and the demo of that build discarded the body. The cause is not known; Codex later saw that RPC answer 429, which fits a rate limit and proves nothing. Log #3 stays paid and unserved, its claim window has passed, and nothing retried it | `5txs2D6S8jXhguVRfiwBrZxXc2kvvM21gmgEGQsJVq1s` |
+| Second take, through `https://test.rpc.fastnear.com`, build `0f461f0` | **Exit 0 in 23.1 s.** Every check passed. Below | Below |
 
-The failed recording is kept, with the wallet and state as they are. Log #3 is paid and was never served. Its claim window has passed, and nothing retries it. The observer's 402 in that run does not show that the secret protects the payment, since every claim was refused. Codex later saw `rpc.testnet.near.org` answer 429 to reads of that transaction, which fits a rate limit but does not prove the cause. See the [review status](review/status.md) for the diagnostic added since.
+The second take, signed by the agent's limited key `ed25519:HNf59MA29Fb7N4adwkmWfDMqsaGP76avN9a3ydfnPnKY`, each `FINAL` with no failed receipt:
 
-On 8 Nov Steven chose to **delay the lock** and asked for the redeploy, if needed, tests, and a recorded demo. Codex runs these as the only transaction operator. Claude sends no testnet transaction meanwhile.
-
-| # | Step | Who | Why here |
+| Step | Result | Gas | Transaction |
 | --- | --- | --- | --- |
-| 1 | Independent review of `bb706b7` and its rehearsal | Codex | Before any deploy |
-| 2 | Redeploy the policy in place, only if the chain's code hash differs from the build's, then read the state back | Codex | Keeps the verifying key, agent, log and funds. `scripts/upgrade-rehearsal.sh` rehearses this and going back on a sandbox, and the old build can be restored while the key exists |
-| 3 | One recorded demo run on that build | Codex | Each run uses 2 of the UTC day's 5 blocked attempts |
-| 4 | Record the transactions on this page | Claude, from Codex's evidence | So every claim points at the chain |
+| Pay the vendor 0.05 mUSDC | `zk_proof_verified`, `payment_approved`, one `ft_transfer` of 50000 from the policy to the vendor with memo `nearx402:4`, `payment_paid`. Log #4 `Paid`. 6 receipts | 41.44 Tgas | `G46TzNiacRWn9JtxKr3ucLRfotLLM7FoGNeeeN5eHeL` |
+| Attempt A: prove with the attacker named | `payment_blocked`, `invalid proof`, log #5, no token transfer. 2 receipts | 36.19 Tgas | `AWM9KTdm2V9hmPbZyk6fEzbjuv6Up5WRt1V1RdAgtbqV` |
+| Attempt B: a valid proof sent to the attacker | `payment_blocked`, `invalid proof`, log #6, no token transfer. 2 receipts | 36.22 Tgas | `248x4Q8gaKTt8aUE36duxFy2FaBLrjBtSxTPxePqwRmS` |
+
+From the run's own output, which no chain read can confirm: the observer's rebuilt receipt got HTTP 402 for the secret, the agent got HTTP 200 with the sample data, and the replay got HTTP 402 as already redeemed. The proof took 183 ms on the agent's machine.
+
+State at Codex's verification block `DTn67YRqdvakLvE6kU8dXveYVo9LBqyW6mdZazdSJo3h`, and read again by Claude afterwards: policy 9.85 mUSDC, finance 10.00, vendor 0.15, outside recipient and agent 0. Log length 7. Breaker 2 of 5 on 8 Nov UTC, not frozen, nothing pending. The agent still has only its `pay_zk` key, with about 0.973 NEAR of allowance. The policy still has one full-access key.
+
+The second take used a per-run configuration with the fastnear RPC; the project's `deploy/testnet.json` was not changed. The recording, its log and a silent terminal video are in `demo-2026-11-08/take-02/`, and the failed take stays in `demo-2026-11-08/`, both outside the repository. The build on the chain matches the current source, so no further redeploy is needed unless the contract changes.
 
 **No lock step follows.** The policy's full-access key stays. Deleting it would be permanent, and would need its own decision from Steven, with the withdrawal limit in [reserved-recovery.md](reserved-recovery.md) in view.
+
+The redeploy command Codex used, for the record:
 
 ```bash
 near contract deploy nearx402-policy.testnet use-file res/policy.wasm without-init-call network-config testnet sign-with-legacy-keychain send
@@ -76,12 +81,13 @@ What has been checked, and how:
 
 | Part | How far it was checked |
 | --- | --- |
-| Steps 6, 8 and 9: `zk-setup` and `demo-zk --network testnet` | Run as separate processes against a **local sandbox** by `crates/nearx402/tests/zk_separate_runs.rs`, and once on testnet |
+| Steps 6, 8 and 9: `zk-setup` and `demo-zk --network testnet` | Run as separate processes against a **local sandbox** by `crates/nearx402/tests/zk_separate_runs.rs`, and twice on testnet |
 | `near` commands in steps 5, 6 and 7 | **Executed on testnet** |
 | `near` command in step 10 | Its subcommand was checked against `near` 0.31.1's `--help`. **Not executed.** Whether the deploy used the commands in steps 2 to 4 is not known |
-| The limited key | Signed all three demo transactions on testnet |
-| HTTP 200, the rebuilt receipt and the replay | Reported by the demo run on the local vendor. A chain read cannot confirm these. The payment behind them is on chain |
-| Testnet's RPC, gas and timing | One run only. See the end of this page |
+| The redeploy without an init call | **Executed on testnet** by Codex on 8 Nov, after the sandbox rehearsal |
+| The limited key | Signed all six demo transactions on testnet, and the failed take's payment |
+| HTTP 200, the rebuilt receipt and the replay | Reported by the demo runs on the local vendor. A chain read cannot confirm these. The payments behind them are on chain |
+| Testnet's RPC, gas and timing | Two runs, and one failed take. See the end of this page |
 
 Testnet-only entries are eligible on every track (Q-010 in the official `HACKATHON.md`), and testnet NEAR is free (Q-008).
 
@@ -249,16 +255,16 @@ cargo run -q -p nearx402 --bin zk-setup --profile prover -- recover --dir .zx402
 
 Then send `finance/set_zk_agent.json` as in step 6. The wallet adopts the new state on its next run. This **resets the day's spending**, and sets the breaker limit back to the default unless you add it to the file again.
 
-## What one testnet run showed
+## What the testnet runs showed
 
-- Gas per payment: 41.42 Tgas, against 41 on the sandbox. A blocked attempt: about 36.2 Tgas.
-- Allowance: three calls used 0.01127 NEAR, about 0.0038 each.
-- `https://rpc.testnet.near.org` allowed `view_state` on the policy contract, which scene 3 reads, and the demo's request rate for one run.
-- The facilitator's `FINAL` wait worked on testnet in this run, and each transaction later read back as `FINAL`.
-- A substring search of the three transactions and their logs found no salt and no hidden vendor. Short integers cannot be shown absent this way, because their digits can appear by chance inside unrelated public numbers.
+- Gas per payment: 41.42 Tgas on 7 Nov and 41.44 on 8 Nov, against 41.16 on the sandbox. A blocked attempt: 36.18 to 36.22 Tgas.
+- Allowance: three calls used 0.01127 NEAR on 7 Nov, about 0.0038 each. Seven calls in all have used about 0.027 NEAR.
+- `https://rpc.testnet.near.org` allowed `view_state` on the policy contract and one run's request rate on 7 Nov. On 8 Nov it refused the facilitator's claims in the first take, cause unrecorded, and answered 429 to reads afterwards. `https://test.rpc.fastnear.com` carried the second take, including `view_state`, in 23.1 s end to end.
+- The facilitator's `FINAL` wait worked on testnet in both runs, and each transaction later read back as `FINAL`.
+- A substring search of the 7 Nov transactions and their logs found no salt and no hidden vendor. Short integers cannot be shown absent this way, because their digits can appear by chance inside unrelated public numbers. The 8 Nov transactions were not searched this way.
 
 ## What must still be verified on testnet
 
-- Time per payment: not measured separately. The sandbox's figure is 1.2 s.
+- Time per payment: not measured separately. The 8 Nov run took 23.1 s for the whole story, with the proof in 183 ms. The sandbox's figure is 1.2 s per payment.
 - The `delete-keys` command in step 10, which is not planned to run.
 - The dashboard, using `?policy=<id>&rpc=<url>&symbol=mUSDC`. The transaction column stays empty there, because the hash list only exists in a demo run.

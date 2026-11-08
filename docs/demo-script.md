@@ -1,6 +1,6 @@
 # Three-minute demo script
 
-Draft, 8 Nov 2026. Codex runs the recorded testnet demo as the only transaction operator. The first recording, on 8 Nov, failed at the agent's claim after the payment ([testnet.md](testnet.md)), so no usable recording exists yet; the retake follows the [retake runbook](review/retake-runbook.md). The narration is about 330 words, which fits three minutes with pauses. Check every number against the recorded run before publishing, and change the narration where they differ.
+Draft, 8 Nov 2026. Codex ran the recorded testnet demo as the only transaction operator. The first take on 8 Nov failed at the agent's claim after the payment; the second take the same day passed every check, exit 0 in 23 s ([testnet.md](testnet.md#8-nov-2026-the-redeploy-and-the-recorded-run)). Its cast, log and a silent terminal video are in `demo-2026-11-08/take-02/`, outside the repository. The narration below was checked against that take's output: 0.05 mUSDC, one key limited to `pay_zk`, 402 then 200 then 402, two blocked attempts, breaker 2 of 5. It is about 330 words, which fits three minutes with pauses. Any further take follows the [retake runbook](review/retake-runbook.md).
 
 ## Narration
 

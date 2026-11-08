@@ -4,7 +4,7 @@ A spend-policy wallet for AI agents that pay x402 APIs, settled on NEAR. Built a
 
 Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every attempt the policy blocks lands in an on-chain audit log. A call that reverts, such as malformed input or an already frozen agent, writes nothing.
 
-> **Status (8 Nov 2026):** runs end to end on a local NEAR sandbox, and the ZK demo has run once on testnet with a mock token ([transactions below](#on-testnet), [details](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** **The testnet contract is mutable:** the team keeps its full-access key, so trusting it means trusting the team not to replace its code. Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
+> **Status (8 Nov 2026):** runs end to end on a local NEAR sandbox, and the ZK demo has run twice on testnet with a mock token, the last time on the current build and recorded ([transactions below](#on-testnet), [details](docs/testnet.md)). The ZK mode keeps the spending policy private: [docs/zk-policy.md](docs/zk-policy.md). **It hides the policy, not payments: vendor and transfer amount stay public.** **The testnet contract is mutable:** the team keeps its full-access key, so trusting it means trusting the team not to replace its code. Nothing here has had a third-party audit. The encrypted audit log is not built yet (see [Roadmap](#roadmap)).
 
 ## Try the private policy (no accounts, no funds)
 
@@ -34,15 +34,17 @@ Against contracts already deployed, finance runs `zk-setup` and the agent runs `
 
 ### On testnet
 
-One run on 7 Nov 2026, against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from that run's output, while the payment and rejections below are on chain. The current source adds `reconcile_payment`, which was not on testnet then, so that run used the earlier build.
+Two runs against `nearx402-policy.testnet` with the mock token `nearx402-musdc.testnet`: on 7 Nov 2026 on an earlier build, and on 8 Nov on the current build, code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`, recorded. The vendor and facilitator ran on a local machine talking to testnet, so the HTTP 200 comes from the run's output, while the payment and rejections below are on chain. The 7 Nov transactions, the redeploy, and a failed take on 8 Nov whose payment was never served are in [docs/testnet.md](docs/testnet.md).
 
 **The contract is not locked, by choice.** On 8 Nov Steven chose to delay the lock and keep `nearx402-policy.testnet`'s full-access key, so a lost callback can still be fixed with new code ([why](docs/reserved-recovery.md#what-it-does-not-cover-withdrawals)). The cost is trust: whoever holds that key, the team, can deploy code that does anything the account can, including moving its tokens. As long as the code is not replaced, the agent cannot bypass the policy: its only key calls `pay_zk`.
 
+The 8 Nov run, each transaction `FINAL` with no failed receipt:
+
 | Step | Result | Transaction |
 | --- | --- | --- |
-| Agent pays the vendor 0.05 mUSDC, 41.42 Tgas | Proof verified, then one token transfer. Log #0 `Paid` | [`ErMc9bfw…`](https://testnet.nearblocks.io/txns/ErMc9bfwTJSTQXDtf1c7QM73vUHESQN8DR8KvSucFMw5) |
-| Agent proves for the attacker anyway | `invalid proof`, no token transfer. Log #1 `Blocked` | [`7Jq2vy4w…`](https://testnet.nearblocks.io/txns/7Jq2vy4wy5qAdn86oWf7PThmi4mu4dbeaJKLSLvK6Nx7) |
-| Agent sends a valid proof to the attacker | `invalid proof`, no token transfer. Log #2 `Blocked` | [`4P8DhKWG…`](https://testnet.nearblocks.io/txns/4P8DhKWGm46FEvp2SdSR3uuNg8hxU63kVhH5CmFL3Cti) |
+| Agent pays the vendor 0.05 mUSDC, 41.44 Tgas | Proof verified, then one token transfer. Log #4 `Paid` | [`G46TzNia…`](https://testnet.nearblocks.io/txns/G46TzNiacRWn9JtxKr3ucLRfotLLM7FoGNeeeN5eHeL) |
+| Agent proves for the attacker anyway, 36.19 Tgas | `invalid proof`, no token transfer. Log #5 `Blocked` | [`AWM9KTdm…`](https://testnet.nearblocks.io/txns/AWM9KTdm2V9hmPbZyk6fEzbjuv6Up5WRt1V1RdAgtbqV) |
+| Agent sends a valid proof to the attacker, 36.22 Tgas | `invalid proof`, no token transfer. Log #6 `Blocked` | [`248x4Q8g…`](https://testnet.nearblocks.io/txns/248x4Q8gaKTt8aUE36duxFy2FaBLrjBtSxTPxePqwRmS) |
 
 **What stays public:** the recipient and amount of every payment, and of every rejected attempt. A paid vendor is visibly allowed, and a day's payments are a lower bound on the cap. A compromised agent can read the policy, because it must hold it to prove. The trusted setup is local, so it is not production-safe.
 
@@ -253,7 +255,7 @@ Run one facilitator instance only: its redemption store is atomic within a singl
 - [x] Groth16 verifier spike: 35.26 Tgas on a local sandbox.
 - [x] ZK proof of policy compliance (Option C) on a local sandbox, about 41 Tgas per payment. Vendor and amount stay public.
 - [x] ZK mode in its own demo and the dashboard, on a local sandbox.
-- [x] Testnet: contracts deployed, private-mode setup done, and one full ZK demo run, about 41 Tgas per payment. Mock token, and the contract stays mutable by choice.
+- [x] Testnet: contracts deployed, private-mode setup done, and two full ZK demo runs, the last on the current build and recorded, about 41 Tgas per payment. Mock token, and the contract stays mutable by choice.
 - [ ] Encrypted audit log readable by the owner (Option A).
 
 ## Baseline disclosure
