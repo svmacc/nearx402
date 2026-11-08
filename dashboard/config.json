@@ -1,0 +1,6 @@
+{
+  "policy": "nearx402-policy.testnet",
+  "rpc": "https://test.rpc.fastnear.com",
+  "network": "testnet",
+  "symbol": "mUSDC"
+}

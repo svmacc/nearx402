@@ -48,6 +48,8 @@ The 8 Nov run, each transaction `FINAL` with no failed receipt:
 
 **What stays public:** the recipient and amount of every payment, and of every rejected attempt. A paid vendor is visibly allowed, and a day's payments are a lower bound on the cap. A compromised agent can read the policy, because it must hold it to prove. The trusted setup is local, so it is not production-safe.
 
+**Dashboard.** [`dashboard/index.html`](dashboard/index.html) is a static page that reads the contract through public RPC: balance, the day's total, every log entry, and each agent's breaker count. It holds no key. `dashboard/config.json` points it at `nearx402-policy.testnet`, so opening the folder with any static server shows testnet as it is now, and the `?policy=`, `?rpc=` and `?symbol=` query parameters override it. [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes the same folder to GitHub Pages at `https://svmacc.github.io/nearx402/` once Pages is set to "GitHub Actions" in the repository settings.
+
 ## The core demo: public limits (no accounts, no funds)
 
 ```bash
