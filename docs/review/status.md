@@ -131,7 +131,7 @@ Every use of the old name in the earlier history was checked. It was this projec
 
 ## `reconcile_payment`: for Codex's review (7 Nov 2026)
 
-**Status: implemented locally, on Steven's choice to add it and then lock. Not deployed. Codex reviewed `3f28d24` and has not yet reviewed the answer below.** It addresses the open item on recovering `reserved`. Design and limits: [reserved-recovery.md](../reserved-recovery.md), [SD-016](../security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim).
+**Status: implemented locally, on Steven's choice to add it and then lock, changed on 8 Nov to delaying the lock. Not deployed. Codex reviewed `3f28d24` and has not yet reviewed the answer below.** It addresses the open item on recovering `reserved`. Design and limits: [reserved-recovery.md](../reserved-recovery.md), [SD-016](../security-decisions.md#sd-016-finance-closes-a-payment-with-a-lost-callback-on-a-stated-claim).
 
 **Codex's review of `3f28d24`:** 20 unit tests and the sandbox test passed independently. Codex recommended neither a redeploy nor a lock until two questions were answered, and said not to report its model as a proven on-chain exploit.
 
