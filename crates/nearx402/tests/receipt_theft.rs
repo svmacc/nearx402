@@ -6,6 +6,7 @@
 //! observer received the data, and the agent had paid for nothing.
 
 use nearx402::policy::{PayReceipt, Status};
+use nearx402::rejection;
 use nearx402::server;
 use nearx402::world::World;
 use nearx402::x402::{self, NearPolicyProof, PaymentPayload, PaymentRequired, PaymentRequirements};
@@ -86,11 +87,16 @@ async fn a_proof_rebuilt_from_public_data_buys_nothing() {
     let (public_nonce, public_commitment) = public_memo.split_once(':').unwrap();
     assert_eq!(public_nonce, req.extra.nonce);
 
-    // A guessed secret.
-    let guess = proof(&w, &req, &paid, public_nonce, &x402::new_receipt_secret());
+    // A guessed secret. The diagnostic the demo prints must read the vendor's
+    // real wording as a secret mismatch, and must not print the secret.
+    let guessed = x402::new_receipt_secret();
+    let guess = proof(&w, &req, &paid, public_nonce, &guessed);
     let (status, body) = present(&http, &url, &guess).await;
     assert_eq!(status, 402, "a guess claimed the payment: {body}");
     assert!(body.contains("receipt secret"), "{body}");
+    let why = rejection::explain(status, &body, &[&guessed, &secret]);
+    assert_eq!(why.cause, rejection::Cause::SecretMismatch, "{body}");
+    assert!(!why.to_string().contains(&guessed) && !why.to_string().contains(&secret));
 
     // The commitment itself, which is public.
     let commitment = proof(&w, &req, &paid, public_nonce, public_commitment);
@@ -138,6 +144,11 @@ async fn a_proof_rebuilt_from_public_data_buys_nothing() {
     let (status, body) = present(&http, &url, &claim).await;
     assert_eq!(status, 402, "{body}");
     assert!(body.contains("already redeemed"), "{body}");
+    assert_eq!(
+        rejection::explain(status, &body, &[&secret]).cause,
+        rejection::Cause::AlreadyRedeemed,
+        "{body}"
+    );
 
     // The whole flow through the agent's own client.
     let fetched = agent.fetch(&url).await.unwrap();

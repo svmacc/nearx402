@@ -7,6 +7,7 @@ pub mod deployment;
 pub mod facilitator;
 pub mod policy;
 pub mod reconcile_check;
+pub mod rejection;
 pub mod server;
 pub mod vendor;
 pub mod world;

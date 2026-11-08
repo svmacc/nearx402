@@ -33,6 +33,7 @@ use nearx402::agent::{payment_http_client, quote};
 use nearx402::deployment::{self, check_limited_keys, DemoConfig, PolicyParams, SetupPaths};
 use nearx402::facilitator::{self, FacilitatorConfig};
 use nearx402::policy::{PayReceipt, PayZkArgs, PayZkResult, PolicyClient, Status};
+use nearx402::rejection;
 use nearx402::server;
 use nearx402::vendor::{market_data_vendor, VendorConfig};
 use nearx402::world::{World, DAILY_CAP, PER_CALL_MAX, WALLET_FUNDING};
@@ -705,35 +706,63 @@ async fn main() -> Result<()> {
 
     // Everything but the secret can be read from the chain, so an observer can
     // try to claim this payment first.
+    // Each refusal below is read from the vendor's 402 body, so a refusal for
+    // another reason, such as an RPC rate limit, is not mistaken for the check
+    // being shown. Nothing here retries a claim or a payment.
+    let observer_secret = x402::new_receipt_secret();
     let observer = http
         .get(&data_url)
-        .header(x402::PAYMENT_HEADER, claim(x402::new_receipt_secret())?)
+        .header(x402::PAYMENT_HEADER, claim(observer_secret.clone())?)
         .send()
         .await?;
+    let observer_status = observer.status();
     ensure!(
-        observer.status() == 402,
-        "someone without the secret claimed the payment: HTTP {}",
-        observer.status()
+        observer_status == 402,
+        "someone without the secret claimed the payment: HTTP {observer_status}"
     );
-    ui.line(
-        "observer",
-        "rebuilds the receipt from public data, without the agent's secret: HTTP 402",
+    let observer = rejection::explain(
+        observer_status.as_u16(),
+        &observer.text().await.unwrap_or_default(),
+        &[&observer_secret, &receipt_secret],
     );
+    if observer.cause == rejection::Cause::SecretMismatch {
+        ui.line(
+            "observer",
+            "rebuilds the receipt from public data, without the agent's secret: HTTP 402, the secret does not match",
+        );
+    } else {
+        ui.bad(
+            "observer",
+            &format!("refused, but not for the secret: {observer}. This does not show the secret's protection"),
+        );
+    }
 
-    let payment_header = claim(receipt_secret)?;
+    let paid = format!(
+        "paid on chain as log #{}, transaction {}",
+        receipt.outcome.log_id, receipt.tx_hash
+    );
+    let payment_header = claim(receipt_secret.clone())?;
     let served_data = http
         .get(&data_url)
         .header(x402::PAYMENT_HEADER, &payment_header)
         .send()
         .await?;
-    ensure!(
-        served_data.status() == 200,
-        "expected HTTP 200, got {}",
-        served_data.status()
-    );
+    let served_status = served_data.status();
+    if served_status != 200 {
+        let why = rejection::explain(
+            served_status.as_u16(),
+            &served_data.text().await.unwrap_or_default(),
+            &[&receipt_secret],
+        );
+        bail!("paid but not served: {paid}, and the vendor refused the claim: {why}. Do not pay again; nothing was retried");
+    }
     ui.good(
         "HTTP 200",
         &format!("the vendor served: {}", served_data.text().await?),
+    );
+    ensure!(
+        observer.cause == rejection::Cause::SecretMismatch,
+        "the observer was refused for another reason ({observer}), so this run does not show that the secret protects the payment"
     );
 
     let replay = http
@@ -741,10 +770,20 @@ async fn main() -> Result<()> {
         .header(x402::PAYMENT_HEADER, &payment_header)
         .send()
         .await?;
-    ensure!(replay.status() == 402, "a receipt must only work once");
+    let replay_status = replay.status();
+    ensure!(replay_status == 402, "a receipt must only work once");
+    let replay = rejection::explain(
+        replay_status.as_u16(),
+        &replay.text().await.unwrap_or_default(),
+        &[&receipt_secret],
+    );
+    ensure!(
+        replay.cause == rejection::Cause::AlreadyRedeemed,
+        "the replay was refused for another reason ({replay}), so this run does not show single use"
+    );
     ui.line(
         "replay",
-        "the same receipt again: HTTP 402, a receipt buys one response",
+        "the same receipt again: HTTP 402, already redeemed, a receipt buys one response",
     );
 
     // ---------- scene 2 ----------

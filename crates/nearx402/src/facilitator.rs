@@ -303,7 +303,7 @@ impl Facilitator {
             },
             Err(e) => VerifyResponse {
                 is_valid: false,
-                invalid_reason: Some(format!("{e:#}")),
+                invalid_reason: Some(public_reason(&e, req)),
                 payer,
             },
         }
@@ -322,7 +322,7 @@ impl Facilitator {
             .check(&req.payment_payload, &req.payment_requirements)
             .await
         {
-            resp.error_reason = Some(format!("{e:#}"));
+            resp.error_reason = Some(public_reason(&e, req));
             return resp;
         }
         // Two concurrent settles of the same proof: only the first insert wins.
@@ -330,7 +330,12 @@ impl Facilitator {
         match self.redeemed.lock().await.insert(key, unix_now()) {
             Ok(true) => resp.success = true,
             Ok(false) => resp.error_reason = Some("payment already redeemed".into()),
-            Err(e) => resp.error_reason = Some(format!("could not record redemption: {e:#}")),
+            Err(e) => {
+                resp.error_reason = Some(public_reason(
+                    &e.context("could not record redemption"),
+                    req,
+                ))
+            }
         }
         resp
     }
@@ -463,6 +468,22 @@ impl Facilitator {
         resp.get("result")
             .cloned()
             .ok_or_else(|| anyhow!("RPC response has no result"))
+    }
+}
+
+/// A refusal reason as it leaves the facilitator. The vendor passes it on in its
+/// 402 body to whoever asked, so it must not carry the RPC URL's path, query or
+/// credentials, which can hold an API key, nor the claim's receipt secret. It is
+/// also bounded. Only the text is shortened; no check changes.
+fn public_reason(e: &anyhow::Error, req: &FacilitatorRequest) -> String {
+    use crate::rejection::{classify, redact, Cause};
+    let full = format!("{e:#}");
+    let line = redact(&full, &[&req.payment_payload.payload.receipt_secret]);
+    // Said first, so that the cut to a bounded length cannot drop it.
+    if classify(&full) == Cause::RpcRateLimited {
+        format!("RPC rate limit, too many requests: {line}")
+    } else {
+        line
     }
 }
 
@@ -735,6 +756,73 @@ mod tests {
         let r = f.verify(req).await;
         assert!(!r.is_valid);
         r.invalid_reason.unwrap()
+    }
+
+    /// The failure seen on testnet on 8 Nov 2026: the RPC answered 429. The
+    /// refusal must say so, must not read as a refusal of the payment, and must
+    /// not carry the RPC URL's credentials or the receipt secret.
+    #[tokio::test]
+    async fn an_rpc_that_rate_limits_is_reported_as_such() {
+        use crate::rejection::{explain, Cause};
+        use crate::x402::PaymentRequired;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = hits.clone();
+        let app = Router::new().fallback(move || {
+            let counter = counter.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                (StatusCode::TOO_MANY_REQUESTS, "Too Many Requests")
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let url = format!("http://user:pw@{addr}/v1/key/SECRETPATH?apiKey=SECRETKEY");
+        let mut cfg = facilitator().cfg;
+        cfg.network = NetworkConfig::from_rpc_url("custom", url.parse().unwrap());
+        cfg.rpc_url = url;
+        let f = Facilitator::new(cfg).unwrap();
+        let req = request(&f);
+        let secret = req.payment_payload.payload.receipt_secret.clone();
+
+        let why = reason(&f, &req).await;
+        assert!(hits.load(Ordering::SeqCst) >= 1, "the RPC was never asked");
+        // What leaves the facilitator, and so reaches anyone the vendor answers.
+        for leak in ["SECRETKEY", "SECRETPATH", "apiKey", "pw@", secret.as_str()] {
+            assert!(!why.contains(leak), "{leak} leaves the facilitator: {why}");
+        }
+        let settled = f.settle(&req).await;
+        assert!(!settled.success);
+        let settle_why = settled.error_reason.unwrap();
+        for leak in ["SECRETKEY", "SECRETPATH", "apiKey", "pw@", secret.as_str()] {
+            assert!(
+                !settle_why.contains(leak),
+                "{leak} leaves settle: {settle_why}"
+            );
+        }
+        let body = serde_json::to_string(&PaymentRequired {
+            x402_version: x402::VERSION,
+            error: Some(why.clone()),
+            accepts: vec![],
+        })
+        .unwrap();
+        let r = explain(402, &body, &[&secret]);
+        eprintln!("facilitator's reason: {why}\nprinted as: {r}");
+        assert_eq!(r.cause, Cause::RpcRateLimited, "reason was: {why}");
+        assert!(!r.cause.is_about_the_payment());
+        for leak in ["SECRETKEY", "SECRETPATH", "apiKey", "pw@", secret.as_str()] {
+            assert!(!r.detail.contains(leak), "{leak} in {}", r.detail);
+        }
+        // A refusal for a rate limit redeems nothing.
+        assert!(!f
+            .redeemed
+            .lock()
+            .await
+            .contains(&("policy.testnet".into(), 0)));
+        server.abort();
     }
 
     #[tokio::test]

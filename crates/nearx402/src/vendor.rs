@@ -133,7 +133,9 @@ async fn payment_required(
     );
     let body = PaymentRequired {
         x402_version: x402::VERSION,
-        error,
+        // Anyone can read this body, so the reason is bounded and carries no URL
+        // path, query or credentials.
+        error: error.map(|e| crate::rejection::redact(&e, &[])),
         accepts: vec![requirements],
     };
     (StatusCode::PAYMENT_REQUIRED, Json(body)).into_response()

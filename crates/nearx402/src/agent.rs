@@ -196,7 +196,7 @@ impl Agent {
                 log_id: receipt.outcome.log_id,
                 nonce: req.extra.nonce.clone(),
                 tx_hash: receipt.tx_hash.clone(),
-                receipt_secret,
+                receipt_secret: receipt_secret.clone(),
             },
         };
         // From here on the money has moved, whatever happens to this request. A
@@ -216,9 +216,10 @@ impl Agent {
             bail!("the vendor answered a paid request with a redirect, not followed; {moved}");
         }
         if !second.status().is_success() {
-            let status = second.status();
+            let status = second.status().as_u16();
             let text = second.text().await.unwrap_or_default();
-            bail!("vendor rejected the payment ({status}): {text}; {moved}");
+            let why = crate::rejection::explain(status, &text, &[&receipt_secret]);
+            bail!("vendor rejected the payment: {why}; {moved}");
         }
         Ok(Fetch::Paid {
             body: second

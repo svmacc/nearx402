@@ -43,6 +43,16 @@ Claude did not make these accounts or this deploy. Claude sent the transactions 
 
 ## Next steps
 
+**Reported by Codex on 8 Nov, not re-read by Claude:**
+
+| Step | Result | Transaction |
+| --- | --- | --- |
+| Codex's independent rerun of `bb706b7` | 22 reconcile unit tests, 14 checker tests, and the upgrade and rollback rehearsal pass | None |
+| Redeploy of the policy, no init | Code hash `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx`. All storage, nine views, token balances and the agent's key identical before and after. The policy's key kept | `AWpxaYA7xVnw8Y2WXhY1fkQD7Q6f3KNv3cwLayGaDCVU` |
+| Recorded demo run | **Failed, exit 1 after 76.9 s.** The payment of 0.05 mUSDC succeeded as log #3, and the vendor went from 0.05 to 0.10. The observer got 402, and **so did the agent's own claim**. The demo discarded the 402 body, so the reason is not known | `5txs2D6S8jXhguVRfiwBrZxXc2kvvM21gmgEGQsJVq1s` |
+
+The failed recording is kept, with the wallet and state as they are. Log #3 is paid and was never served. Its claim window has passed, and nothing retries it. The observer's 402 in that run does not show that the secret protects the payment, since every claim was refused. Codex later saw `rpc.testnet.near.org` answer 429 to reads of that transaction, which fits a rate limit but does not prove the cause. See the [review status](review/status.md) for the diagnostic added since.
+
 On 8 Nov Steven chose to **delay the lock** and asked for the redeploy, if needed, tests, and a recorded demo. Codex runs these as the only transaction operator. Claude sends no testnet transaction meanwhile.
 
 | # | Step | Who | Why here |

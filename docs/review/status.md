@@ -2,6 +2,45 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## Paid but not served on testnet: diagnostic (8 Nov 2026)
+
+**Status: for Codex's review. Retake held by Codex until this is reviewed.** Claude changed off-chain runtime and tests only, sent no transaction, and made no RPC call to testnet, since Codex asked to stop polling `rpc.testnet.near.org` after it answered 429.
+
+**What happened, as Codex reported:** after the redeploy, one recorded run paid 0.05 mUSDC as log #3 (`5txs2D6S8jXhguVRfiwBrZxXc2kvvM21gmgEGQsJVq1s`). The observer got 402, and the agent's own claim got 402 too. `demo-zk` threw the 402 body away, so the reason was lost.
+
+**Facts, from the code:**
+
+- The vendor answers any refused claim with 402 and puts the facilitator's reason in `PaymentRequired.error`. An RPC failure during the facilitator's checks is a refusal like any other, so it also gives 402.
+- One claim makes the facilitator read the chain twice, once in `/verify` and once in `/settle`. Each pass reads the account's code hash, the token, the log entry, and then the transaction at `FINAL`. That is 8 RPC calls for the agent's claim, and 3 for the observer's, which stops at the memo. near-api also retries a failed read on its own.
+- The observer's 402 was never checked for its reason. A rate limit would have looked the same as the secret check.
+
+**Assumption, not proven:** a 429 from `rpc.testnet.near.org` refused both claims. Codex saw 429 there afterwards. The body that would show it is gone.
+
+**Found while testing, and fixed:** near-api's error text carries the RPC URL **with its path and query**. The facilitator put that text in its reason, and the vendor passed it to whoever asked, so an RPC URL holding an API key would leak to any client, an observer included, whenever the RPC fails. The default testnet URL holds no key.
+
+**Changes:**
+
+| Where | Change |
+| --- | --- |
+| `src/rejection.rs`, new | Reads a 402 body into a cause and one bounded line, at most 240 characters. Control characters are removed. URLs keep only the scheme and host. Runs of 64 or more hex digits, the length of a receipt secret or nonce, are hidden, as is any secret the caller names. Headers are never read |
+| `demo-zk` | Paid but not served now stops with `paid but not served: paid on chain as log #N, transaction HASH, and the vendor refused the claim: CAUSE: DETAIL. Do not pay again; nothing was retried`. The observer must be refused **for the secret**, and the replay **as already redeemed**. Otherwise the run fails and says that this does not show the check. Before, any 402 passed |
+| `agent.rs` | The same bounded line, instead of the raw body, in the error after a paid claim is refused |
+| Facilitator and vendor | Reasons leave redacted and bounded. A rate limit is named first, so the cut to 240 characters cannot drop it |
+
+**Not changed:** the proof, nonce, TTL, replay and redemption checks, the payment path, and the contract. Nothing retries a claim or a payment. The policy's code hash is still `6BA4L1mo…`.
+
+**Tests:**
+
+| Test | Shows |
+| --- | --- |
+| 6 unit tests in `rejection.rs` | Every reason the facilitator and vendor give maps to its cause. A missing or non-JSON body is said plainly. A secret, 64-hex runs and a URL's credentials, path and query are hidden. The line is bounded, and cut on a character boundary |
+| `an_rpc_that_rate_limits_is_reported_as_such` | A local RPC that answers every call with 429. The facilitator's reason, from `/verify` and from `/settle`, holds neither the URL's key, path or credentials nor the receipt secret. It reads as a rate limit, not as a refusal of the payment, and nothing is redeemed |
+| `receipt_theft`, sandbox | The vendor's real wording reads as a secret mismatch for a guessed secret and as already redeemed for a replay, and the printed line holds no secret |
+| `scripts/demo-zk.sh`, sandbox | Exit 0. The observer is refused for the secret, then HTTP 200, then the replay as already redeemed |
+| Whole workspace | 208 pass, 0 fail, 2 ignored. Clippy and fmt clean. `scripts/demo.sh` exit 0 |
+
+**Limits:** the paid-but-not-served path in `demo-zk` was not run end to end, since it needs a vendor that refuses a real claim. Its formatting is the same `explain` that the tests cover. The redaction sees only text. Another library could print a URL in a form it does not recognise. The cause is read from wording, so a new reason falls back to `other`, which the demo treats as not showing a check. **For the retake:** each claim still costs 8 RPC calls on top of the demo's own, so a rate-limited endpoint can still refuse it, now with the reason printed. Changing the RPC is Codex's call, as Codex said. Claude has not changed `deploy/testnet.json`.
+
 ## Steven's decision: delay the lock (8 Nov 2026)
 
 **Decision, as Codex relayed it:** Steven agreed with Codex, chose to **delay the lock**, and asked for the redeploy if needed, tests, and a recorded demo. The policy's full-access key is not deleted.
