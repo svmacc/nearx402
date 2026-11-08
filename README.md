@@ -207,9 +207,9 @@ scripts/build-contracts.sh
 cargo test --workspace
 ```
 
-210 tests pass as of 8 Nov 2026. Two more run on their own: the rehearsal, by `scripts/upgrade-rehearsal.sh`, and the capture of the checker's fixtures. They cover:
+214 tests pass as of 8 Nov 2026. Two more run on their own: the rehearsal, by `scripts/upgrade-rehearsal.sh`, and the capture of the checker's fixtures. They cover:
 - 98 unit tests for the policy contract (including the circuit breaker, `sync_balance`, `reconcile_payment`, lost withdrawal callbacks, and `pay_zk` with real proofs) and 2 for the token.
-- 36 tests in `crates/nearx402` for refusal diagnostics (including an RPC that answers 429, and what of an RPC URL may be printed), x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
+- 40 tests in `crates/nearx402` for refusal diagnostics (including an RPC that answers 429, what of an RPC URL may be printed, and URLs next to multibyte text), x402 encoding, receipt secrets, offer selection, amount formatting, injection parsing, HMAC nonces, facilitator API keys, the redeemed-payments file, deployment checks, the sample data's label, and the facilitator's local checks and `ft_transfer` event matching.
 - One sandbox end-to-end test of the public-limits flow. It runs the real contracts, vendor, facilitator and agent, and covers:
   - replay, a fake contract, a nonce from another resource, and double settlement;
   - 16 simultaneous redemptions of one payment, of which exactly one is served;

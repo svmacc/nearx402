@@ -183,39 +183,74 @@ pub fn public_url(url: &str) -> String {
     strip_url(url.trim())
 }
 
-/// `https://user:key@host:port/path?query` becomes `https://host:port`, keeping
-/// any characters before the scheme and closing punctuation after the URL.
-fn strip_url(word: &str) -> String {
-    let Some(sep) = word.find("://") else {
-        return word.to_string();
-    };
-    let is_scheme_char = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-');
-    let scheme_at = word[..sep]
-        .rfind(|c: char| !is_scheme_char(c))
-        .map(|j| j + 1)
-        .unwrap_or(0);
-    if scheme_at == sep {
-        return word.to_string();
-    }
-    let rest = &word[sep + 3..];
-    let end = rest
-        .find(['/', '?', '#', ')', ']', '"', '\'', ','])
-        .unwrap_or(rest.len());
-    let authority = &rest[..end];
-    let host = authority.rsplit('@').next().unwrap_or("");
-    let tail: String = rest[end..]
-        .chars()
+/// Punctuation that may close a URL in running text, and is kept after it.
+const CLOSING: [char; 8] = [')', ']', '"', '\'', ',', '.', ':', ';'];
+/// Punctuation that may open the next URL in the same word.
+const OPENING: [char; 3] = ['(', '[', '<'];
+
+/// The run of characters at the end of `s` that `keep` accepts.
+fn trailing(s: &str, keep: impl Fn(&char) -> bool) -> String {
+    s.chars()
         .rev()
-        .take_while(|c| matches!(c, ')' | ']' | '"' | '\'' | ',' | '.' | ':' | ';'))
+        .take_while(keep)
         .collect::<Vec<_>>()
         .into_iter()
         .rev()
-        .collect();
-    format!(
-        "{}{}://{host}{tail}",
-        &word[..scheme_at],
-        &word[scheme_at..sep]
-    )
+        .collect()
+}
+
+/// Every `https://user:key@host:port/path?query` in `word` becomes
+/// `https://host:port`, keeping what comes before the scheme and closing
+/// punctuation after the URL. `word` is untrusted text, so every cut is made
+/// on a character boundary, never on a byte offset into a character.
+fn strip_url(word: &str) -> String {
+    let is_scheme_char = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-');
+    // Where the scheme of the `://` at byte `sep` starts in `s`: right after
+    // the last character before it that cannot be part of a scheme.
+    let scheme_start = |s: &str, sep: usize| {
+        s[..sep]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !is_scheme_char(*c))
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(0)
+    };
+    let mut out = String::new();
+    let mut rest = word;
+    while let Some(sep) = rest.find("://") {
+        if scheme_start(rest, sep) == sep {
+            // `://` without a scheme is not a URL.
+            out.push_str(&rest[..sep + 3]);
+            rest = &rest[sep + 3..];
+            continue;
+        }
+        let after = &rest[sep + 3..];
+        let end = after
+            .find(['/', '?', '#', ')', ']', '"', '\'', ','])
+            .unwrap_or(after.len());
+        let host = after[..end].rsplit('@').next().unwrap_or("");
+        out.push_str(&rest[..sep]);
+        out.push_str("://");
+        out.push_str(host);
+        let dropped = &after[end..];
+        match dropped.find("://") {
+            // Another URL in the same word: continue from its scheme, keeping
+            // only the punctuation between the two, such as `)(` or `,`.
+            Some(next) => {
+                let at = scheme_start(dropped, next);
+                out.push_str(&trailing(&dropped[..at], |c| {
+                    CLOSING.contains(c) || OPENING.contains(c)
+                }));
+                rest = &dropped[at..];
+            }
+            None => {
+                out.push_str(&trailing(dropped, |c| CLOSING.contains(c)));
+                return out;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Replaces every run of exactly 64 or more hex digits.
@@ -351,6 +386,63 @@ mod tests {
             "http://127.0.0.1:3030"
         );
         assert_eq!(public_url("not a url"), "not a url");
+    }
+
+    /// Codex's finding on `0ea1964`: a multibyte character right before a URL
+    /// made the cut land inside that character, and the slice panicked.
+    #[test]
+    fn a_multibyte_character_before_a_url_does_not_panic() {
+        assert_eq!(
+            redact("error: éhttps://user:pw@rpc.example/path?key=SECRET", &[]),
+            "error: éhttps://rpc.example"
+        );
+    }
+
+    #[test]
+    fn urls_next_to_multibyte_text_are_still_cut_to_their_host() {
+        // Characters of 2, 3 and 4 bytes before, inside and after the URL.
+        for prefix in ["", "é", "€", "😀", "日本", "(é", "x", "€:"] {
+            for suffix in ["", "é", "€)", "😀.", "…", ")", "日"] {
+                let s = format!(
+                    "{prefix}https://us€r:pwé@rpc.example:8443/pä/th?apiKey=SECRET😀#f{suffix}"
+                );
+                let r = redact(&s, &[]);
+                for leak in ["SECRET", "pw", "us€r", "/pä", "apiKey", "#f"] {
+                    assert!(!r.contains(leak), "{s:?} -> {r:?} holds {leak}");
+                }
+                assert!(r.contains("https://rpc.example:8443"), "{s:?} -> {r:?}");
+                assert!(r.starts_with(prefix), "{s:?} -> {r:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_url_in_a_word_is_cut_to_its_host() {
+        assert_eq!(
+            redact(
+                "https://a.example/x?k=S1,https://u:p@b.example:8443/y#S2 then http://c.example/z.",
+                &[]
+            ),
+            "https://a.example,https://b.example:8443 then http://c.example."
+        );
+        assert_eq!(
+            redact("(https://a.example/x?k=S1)(https://b.example/y)", &[]),
+            "(https://a.example)(https://b.example)"
+        );
+    }
+
+    #[test]
+    fn closing_punctuation_after_a_url_is_kept() {
+        assert_eq!(
+            redact("(see https://a.example/p?k=S).", &[]),
+            "(see https://a.example)."
+        );
+        assert_eq!(
+            redact("'https://a.example/p',", &[]),
+            "'https://a.example',"
+        );
+        // No path, and `://` without a scheme: nothing to cut.
+        assert_eq!(redact("a://b and ://c/d", &[]), "a://b and ://c/d");
     }
 
     #[test]

@@ -2,6 +2,23 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## Codex's P2 on `0ea1964`: a multibyte character before a URL made `redact` panic (8 Nov 2026)
+
+**Status: fixed, for Codex's verification. `rejection.rs` and its tests only. No check, retry, TTL, config or contract changed; the policy's code hash is still `6BA4L1mo…`. Nothing sent, deployed or pushed.**
+
+**Codex's finding, reproduced first:** `strip_url` took the byte index of the last non-scheme character before `://` and added one. With a multibyte character there, such as `é`, the cut fell inside it and the slice panicked: `redact("error: éhttps://user:pw@rpc.example/path?key=SECRET", &[])` panicked at line 216, `end byte index 1 is not a char boundary`. The text comes from near-api errors and vendor bodies, so untrusted input could crash the facilitator's reason building or the demo's diagnostic. It is a bug in handling untrusted text, not a way to move funds, and not the cause of the 8 Nov 402.
+
+**Fix:** the scheme's start is found with `char_indices` and `len_utf8`, so every cut is on a character boundary. The same pass now cuts every URL in a word, not only the first, keeping the punctuation between two URLs such as `)(` or `,`. Credentials, path, query and fragment are still removed; the host and port stay.
+
+| Test, all in `rejection.rs` | Shows |
+| --- | --- |
+| `a_multibyte_character_before_a_url_does_not_panic` | Codex's exact input gives `error: éhttps://rpc.example` |
+| `urls_next_to_multibyte_text_are_still_cut_to_their_host` | 56 combinations of 2, 3 and 4 byte characters before, inside and after a URL with credentials, a path, a query and a fragment: no panic, nothing of them in the output, host and port kept, prefix intact |
+| `every_url_in_a_word_is_cut_to_its_host` | Two URLs joined by `,` and by `)(`, each cut to its host |
+| `closing_punctuation_after_a_url_is_kept` | `(see https://a.example/p?k=S).` gives `(see https://a.example).`; a URL with no path and a `://` with no scheme are left alone |
+
+Targeted run, as Codex asked: fmt and clippy clean; the 13 `rejection` and 4 `facilitator` unit tests pass, including the 429 test; `receipt_theft` and `paid_not_served` pass on a sandbox. The whole workspace was not rerun for this change.
+
 ## Paid but not served, run end to end; the RPC URL in the demo's output (8 Nov 2026, after `3e047df`)
 
 **Status: for Codex's review, with `3e047df`. Off-chain tests and one printed line changed. No transaction was sent, no RPC call made to testnet, no key, wallet, policy or config touched, and the contract is unchanged at `6BA4L1mo…`.** Codex is rate limited at the moment, so Claude used the time on the limit `3e047df` stated: its paid-but-not-served path had not run end to end.
