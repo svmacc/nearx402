@@ -1,0 +1,6 @@
+old policy (testnet build):  CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU
+new policy (under review):   6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx
+control policy:              8G8TfzEpuzqW18RmKfLWQkhUHVVVXycyY6iVCcKRGxUp
+token, old:                  HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g
+token, new:                  HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g
+testnet policy, expected:    CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU

@@ -1,0 +1,13 @@
+commit under review: 96ad9d5d27bcf843e53824a0497b723624679e3e
+old commit:          32b3be4f4333bbe3406b22651176b39aed7ff96f
+run at (UTC):        2026-11-08T01:22:14Z
+this script sha256:  a0d8341290ea9727b7f4738f27ae15c3dcbdcebe1608889f596456a6fa06001d
+rustc:               rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo:               cargo 1.99.1 (5f94df478 2026-08-27)
+wasm32 target:       1 installed
+cargo-near:          cargo-near-near 0.23.0
+python3:             Python 3.14.4
+kernel:              Linux 6.18.54.1-microsoft-standard-WSL2
+offline:             0
+near-sandbox binary: downloaded into the fresh target directory (needs network)
+control patch:       one u64 field after `reserved` in the contract state

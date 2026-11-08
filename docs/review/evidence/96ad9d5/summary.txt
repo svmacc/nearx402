@@ -1,0 +1,4 @@
+old build equals testnet's:        yes
+rehearsal exit:                    0 (must be 0)
+control exit:                      101 (must be non-zero)
+control failed on deserialization: yes (must be yes)

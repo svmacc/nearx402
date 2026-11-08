@@ -49,7 +49,7 @@ Steven chose to add `reconcile_payment`, and then to lock. In this order, each w
 | 2 | Redeploy the policy in place, then read the state back | Keeps the verifying key, agent, log and funds. `scripts/upgrade-rehearsal.sh` rehearses this and going back on a sandbox. The old build can still be restored at this point |
 | 3 | Run the demo on the new build | Evidence for the code that will be locked. Each run uses 2 of the day's 5 blocked attempts |
 | 4 | Record the video | Before locking, so a problem found on camera can still be fixed |
-| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys. After this, a lost withdrawal callback leaves that amount reserved for good, as [reserved-recovery.md](reserved-recovery.md) explains |
+| 5 | Lock, by deleting `nearx402-policy.testnet`'s key (step 10) | **Permanent.** Then read back that the contract has no keys. After this, each lost withdrawal callback leaves its amount reserved for good, and they add up, as [reserved-recovery.md](reserved-recovery.md) explains. Steven has not yet decided whether to accept that |
 
 ```bash
 near contract deploy nearx402-policy.testnet use-file res/policy.wasm without-init-call network-config testnet sign-with-legacy-keychain send

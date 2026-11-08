@@ -1,0 +1,141 @@
+• Collecting cargo project metadata...
+• done
+
+• Checking rustc version...
+• done
+
+• Checking the host environment...
+• done
+
+• Building contract
+ │    Compiling proc-macro2 v1.0.107
+ │    Compiling quote v1.0.47
+ │    Compiling unicode-ident v1.0.27
+ │    Compiling ident_case v1.0.1
+ │    Compiling serde_core v1.0.229
+ │    Compiling zmij v1.0.23
+ │    Compiling hashbrown v0.17.1
+ │    Compiling equivalent v1.0.3
+ │    Compiling winnow v1.0.4
+ │    Compiling toml_datetime v1.1.2+spec-1.1.0
+ │    Compiling cfg_aliases v0.2.2
+ │    Compiling once_cell v1.21.4
+ │    Compiling borsh v1.8.1
+ │    Compiling strsim v0.11.1
+ │    Compiling serde v1.0.229
+ │    Compiling typenum v1.20.1
+ │    Compiling serde_json v1.0.154
+ │    Compiling foldhash v0.2.0
+ │    Compiling itoa v1.0.18
+ │    Compiling memchr v2.8.3
+ │    Compiling fnv v1.0.7
+ │    Compiling rustversion v1.0.23
+ │    Compiling near-sys v0.4.0
+ │    Compiling near-sdk-env v0.1.8
+ │    Compiling bs58 v0.5.1
+ │    Compiling base64 v0.23.1
+ │    Compiling indexmap v2.14.2
+ │    Compiling hex v0.4.3
+ │    Compiling near-sdk-macros v5.30.0
+ │    Compiling heck v0.5.0
+ │    Compiling hybrid-array v0.4.15
+ │    Compiling syn v3.0.9
+ │    Compiling syn v2.0.119
+ │    Compiling proc-macro-error-attr3 v3.1.1
+ │    Compiling base64 v0.22.1
+ │    Compiling toml_parser v1.1.5+spec-1.1.0
+ │    Compiling near-crypto-hash v0.2.0
+ │    Compiling wee_alloc v0.4.5
+ │    Compiling proc-macro-error3 v3.1.1
+ │    Compiling cfg-if v0.1.10
+ │    Compiling Inflector v0.11.4
+ │    Compiling strum v0.26.3
+ │    Compiling block-buffer v0.12.1
+ │    Compiling crypto-common v0.2.2
+ │    Compiling memory_units v0.4.0
+ │    Compiling toml_edit v0.25.18+spec-1.1.0
+ │    Compiling hex-literal v1.1.0
+ │    Compiling proc-macro-crate v3.5.0
+ │    Compiling digest v0.11.3
+ │    Compiling darling_core v0.24.1
+ │    Compiling impl-tools-lib v0.12.0
+ │    Compiling darling_core v0.20.11
+ │    Compiling serde_derive v1.0.229
+ │    Compiling borsh-derive v1.8.1
+ │    Compiling strum_macros v0.26.4
+ │    Compiling cfg_eval v0.1.2
+ │    Compiling impl-tools v0.12.0
+ │    Compiling near-digest v0.1.4
+ │    Compiling darling_macro v0.20.11
+ │    Compiling darling_macro v0.24.1
+ │    Compiling darling v0.20.11
+ │    Compiling darling v0.24.1
+ │    Compiling serde_with_macros v3.24.0
+ │    Compiling serde_with v3.24.0
+ │    Compiling near-gas v0.3.7
+ │    Compiling near-account-id v3.0.0
+ │    Compiling near-token v0.3.6
+ │    Compiling near-sdk-core v4.4.1
+ │    Compiling near-global-contracts v0.3.2
+ │    Compiling near-sdk v5.30.0
+ │    Compiling policy v0.2.0 (/tmp/tmp.2Mbk7DN1WC/new/contracts/policy)
+ │     Finished `release` profile [optimized] target(s) in 9.19s
+• Running an optimize for size post-step with wasm-opt --enable-nontrapping-float-to-int --enable-bulk-memory...
+• done
+
+✓ Contract successfully built! (in CARGO_NEAR_BUILD_ENVIRONMENT=host)
+     -                Binary: /tmp/tmp.2Mbk7DN1WC/new/target/near/policy/policy.wasm
+     -                  Size: 254.4 KB (254358 bytes)
+     - SHA-256 checksum hex : 4ce47be2dc2270ffa83d901578f66af0538662ad044fad3b71f6fa358c6ea47b
+     - SHA-256 checksum bs58: 6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx
+Here is the console command if you ever need to re-run it again:
+cargo near build non-reproducible-wasm --no-abi
+res/policy.wasm  254358 bytes  code hash 6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx
+• Collecting cargo project metadata...
+• done
+
+• Checking rustc version...
+• done
+
+• Checking the host environment...
+• done
+
+• Building contract
+ │    Compiling near-sdk v5.30.0
+ │    Compiling near-contract-standards v5.30.0
+ │    Compiling mock-usdc v0.1.0 (/tmp/tmp.2Mbk7DN1WC/new/contracts/mock-usdc)
+ │     Finished `release` profile [optimized] target(s) in 2.05s
+• Running an optimize for size post-step with wasm-opt --enable-nontrapping-float-to-int --enable-bulk-memory...
+• done
+
+✓ Contract successfully built! (in CARGO_NEAR_BUILD_ENVIRONMENT=host)
+     -                Binary: /tmp/tmp.2Mbk7DN1WC/new/target/near/mock_usdc/mock_usdc.wasm
+     -                  Size: 145.0 KB (144968 bytes)
+     - SHA-256 checksum hex : f651a6a8b69da8bc1c10caacb906d39ba380d1f7b52cfd0d43e9638f505a01cb
+     - SHA-256 checksum bs58: HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g
+Here is the console command if you ever need to re-run it again:
+cargo near build non-reproducible-wasm --no-abi
+res/mock_usdc.wasm  144968 bytes  code hash HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g
+• Collecting cargo project metadata...
+• done
+
+• Checking rustc version...
+• done
+
+• Checking the host environment...
+• done
+
+• Building contract
+ │    Compiling zk-spike v0.0.1 (/tmp/tmp.2Mbk7DN1WC/new/contracts/zk-spike)
+ │     Finished `release` profile [optimized] target(s) in 0.36s
+• Running an optimize for size post-step with wasm-opt --enable-nontrapping-float-to-int --enable-bulk-memory...
+• done
+
+✓ Contract successfully built! (in CARGO_NEAR_BUILD_ENVIRONMENT=host)
+     -                Binary: /tmp/tmp.2Mbk7DN1WC/new/target/near/zk_spike/zk_spike.wasm
+     -                  Size: 97.9 KB (97887 bytes)
+     - SHA-256 checksum hex : 8c930e94a0f7ace2021acd7b2b22527b7ff55fa1318bbac03800f0d655300c8b
+     - SHA-256 checksum bs58: ATk8sArVS16sA17hhtdsQVYWQUbwJBNB8v9anyWGf11C
+Here is the console command if you ever need to re-run it again:
+cargo near build non-reproducible-wasm --no-abi
+res/zk_spike.wasm  97887 bytes  code hash ATk8sArVS16sA17hhtdsQVYWQUbwJBNB8v9anyWGf11C

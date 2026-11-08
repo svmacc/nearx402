@@ -1,0 +1,18 @@
+    Finished `prover` profile [optimized] target(s) in 0.17s
+     Running tests/upgrade_rehearsal.rs (target/prover/deps/upgrade_rehearsal-d04299fbc5a536d2)
+
+running 1 test
+
+thread 'old_to_new_to_old_without_an_init_call' (1028417) panicked at crates/nearx402/tests/upgrade_rehearsal.rs:75:32:
+get_owner did not return: {"block_hash":"3czPwCqV4R4MS3kyooCJnRQFbuT5cdnB4skTb2KessZx","block_height":203,"error":"wasm execution failed with error: HostError(GuestPanic { panic_msg: \"Cannot deserialize the contract state.\" })","logs":[]}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test old_to_new_to_old_without_an_init_call ... FAILED
+
+failures:
+
+failures:
+    old_to_new_to_old_without_an_init_call
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.68s
+
+error: test failed, to rerun pass `-p nearx402 --test upgrade_rehearsal`

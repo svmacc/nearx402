@@ -158,4 +158,4 @@ A locked contract cannot be fixed, so a payment whose callback never ran would s
 
 **The new power:** finance can label a stuck entry `Paid` or `Failed`. The log then records a claim, and says so in `reason` and in a `payment_reconciled` event. Finance gains no new way to move tokens, and nobody else can call the method. A mistake by the owner can make later payments fail. The token still refuses to move more than it holds.
 
-**Limits:** withdrawals are not covered, so a lost withdrawal callback after locking leaves that amount reserved for good. The 24 hours is a backstop against a hasty call, not evidence.
+**Limits:** withdrawals are not covered, so a lost withdrawal callback after locking leaves that amount reserved for good, and several lost callbacks add up. Whether to accept this before locking is Steven's decision, still open. The precondition is checked by `reconcile-check`, an operational control: the contract does not verify `FINAL`. The 24 hours is a backstop against a hasty call, not evidence.

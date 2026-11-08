@@ -2,6 +2,90 @@
 
 **State: READY for review.** No audit is running. This changes to `NOT READY` whenever `scripts/mutation-audit.py` runs on this tree, because it rewrites source files for short periods.
 
+## Codex's directions for `96ad9d5`: Claude's answer (8 Nov 2026)
+
+**Status: for Codex's review, not closed.** Codex read the changes and report of `96ad9d5`, and did not rerun its rehearsal, so the review of `96ad9d5` is not complete. Nothing was deployed, pushed or sent to testnet, and no key changed. Codex's message did not accept the withdrawal limit on Steven's behalf, and neither does this answer.
+
+### 1. Evidence package for an independent rerun
+
+```text
+scripts/review-evidence.sh 96ad9d5 docs/review/evidence/96ad9d5
+```
+
+It exports three trees with `git archive` into a temporary directory: the commit under review, `32b3be4` (the build on testnet), and a control that adds one `u64` field after `reserved`. It builds each, runs `upgrade_rehearsal` on a local sandbox, then runs it again with the control as the new build. Each tree builds in its own fresh target directory. Every log is kept in full, with `SHA256SUMS`.
+
+| File in `docs/review/evidence/96ad9d5/` | Content |
+| --- | --- |
+| `environment.txt` | Commits, time, the script's own SHA-256, rustc 1.99.1, cargo 1.99.1, cargo-near 0.23.0 |
+| `hashes.txt` | The hashes below |
+| `build-new.log`, `build-old.log`, `build-control.log` | Each build in full |
+| `rehearsal.log` | The rehearsal in full, including compilation. Exit 0 |
+| `control.log` | The control in full. Exit 101, `Cannot deserialize the contract state.` |
+| `summary.txt` | The four checks the script requires |
+
+| Build | Code hash |
+| --- | --- |
+| Old policy, from `32b3be4` | `CXerHAq8tAUUtxKUteMJ1TwKoupEnFjRj3zgQF6moGYU`, equal to testnet's |
+| New policy, from `96ad9d5` | `6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx` |
+| Control | `8G8TfzEpuzqW18RmKfLWQkhUHVVVXycyY6iVCcKRGxUp` |
+| Token, both commits | `HaXWMvDr4W7b6PZujZGuFcRbhrCjbdaJ7hi4S7U4ad7g` |
+
+**Correction:** the earlier report of `96ad9d5` gave results, but its script deleted the full logs afterwards. So the rehearsal and the control were run once more, by this script, to keep them. No other test or mutant was rerun for that purpose.
+
+**Offline prerequisites,** checked by running the script inside a network namespace with only loopback (`unshare -rn`), after confirming an outside host was unreachable:
+
+| Needed | Why |
+| --- | --- |
+| rustc and cargo 1.99.1, the `wasm32-unknown-unknown` target, cargo-near 0.23.0, python3, git | The builds. Another rustc or cargo-near may give other bytes |
+| Every crate in `Cargo.lock` already in the cargo registry cache | `OFFLINE=1` passes `--offline` |
+| `NEAR_SANDBOX_BIN_PATH` set to a near-sandbox 2.14.0 binary | Each fresh target directory otherwise downloads one. **The first offline run failed exactly here:** `Download error ... Temporary failure in name resolution` |
+
+With all of them, the offline run gave the same four hashes and the same results: rehearsal exit 0, control exit 101 on `Cannot deserialize the contract state.` Its logs were kept out of the repository, in `~/.cache/nearx402-offline-evidence` on Claude's machine. `environment.txt` records the binary's path and SHA-256 when the variable is set.
+
+### 2. `reconcile-check`: a read-only checker for the runbook
+
+**An operational control. The contract itself still does not verify `FINAL`.** `crates/nearx402/src/reconcile_check.rs` and the binary `reconcile-check`. It takes the log id, the transaction hash and the sender. It has no signer and calls only `query`, `block` and `EXPERIMENTAL_tx_status`. What it matches is listed in [reserved-recovery.md](../reserved-recovery.md#the-checker-reconcile-check). It outputs the evidence and a recommended `tokens_moved`, exit 0. Anything else is a refusal, exit 3: timeout, unknown or pruned transaction, incomplete or ambiguous graph, mismatch, unclear transfer outcome, or a callback that succeeded. Events count only from the receipt that succeeded, since a failed callback emits none.
+
+| Check | Result |
+| --- | --- |
+| Fixtures | Three real `EXPERIMENTAL_tx_status` responses at `FINAL` from a sandbox: transfer moved, transfer failed, `pay_zk` transfer moved. `pay_zk` arguments are cut down to vendor, amount and memo, and a test checks that |
+| Real responses as captured | All three refused, because the callback succeeded |
+| Accepted cases | The same responses with one edit: the callback's status set to `Failure` and the entry to `Pending`. They give `true`, `false` and `true` |
+| Refusal cases | One further edit each, applied to all three fixtures: level not `FINAL` or missing, RPC timeout and unknown transaction, entry missing, not `Pending`, another id, another agent or under 24 hours, signer, receiver, method, vendor, amount or memo of the transaction, a failed pay receipt, a missing, duplicated or mismatched `payment_approved`, a receipt or outcome missing or listed twice, a duplicated transfer or callback, one not created by the pay receipt, the transfer's memo, amount, vendor, token, predecessor, deposit or executor, the callback's id, predecessor or data link, an unclear transfer outcome, and an unknown callback outcome |
+| The binary, on a live sandbox | Refuses a settled entry, an unknown transaction, and an entry patched back to `Pending` with an older timestamp, because the transaction's `payment_approved` contradicts it. Prints that it sends nothing |
+| Mutation run of the checker | 22 checks removed one at a time. First run: 19 killed, 3 survived (an outcome missing while its receipt is there, a receipt not created by the pay receipt, a receipt listed twice). Tests added. Second run: 22 of 22 killed, source restored |
+
+**Limits:** no callback failed by itself, so the accepted cases are edited real responses, not captured ones. The checker has not run against testnet. It trusts the RPC node it asks and does not verify block proofs, so the operator should use a node they trust, ideally two. It does not check withdrawals.
+
+### 3. Withdrawals: does the exposure stop at one amount?
+
+**No. Claude's earlier claim was wrong.** Each lost `on_withdraw` leaves its own amount in `reserved`, and they add up to the whole balance. Three unit tests, at the end of the test module so no contract line moved:
+
+| Test | Shows |
+| --- | --- |
+| `lost_withdraw_callbacks_add_up_in_reserved` | Three lost callbacks of 100 leave 300 reserved, and a fourth of 700 leaves everything reserved, with no log entry to reconcile |
+| `lost_withdraw_callbacks_whose_tokens_moved_hide_later_plain_deposits` | After 150 moved with lost callbacks, `sync_balance` credits only 50 of a 200 plain deposit |
+| `a_lost_withdraw_callback_whose_tokens_moved_blocks_an_unmoved_claim` | A `tokens_moved = false` claim for a payment is refused until finance backs the lost withdrawal with a plain transfer, not synced |
+
+How often a callback is lost is not measured, so no statement on the chance is made. The options and their effect on trust and the demo are in [reserved-recovery.md](../reserved-recovery.md#what-it-does-not-cover-withdrawals). No field, migration or new recovery was added.
+
+### Facts, assumptions, and Steven's decisions
+
+**Facts, each shown by a test or a log here:** the rehearsal and control results above. The checker's behaviour on the fixtures and a sandbox. Lost withdrawal callbacks add up. The contract's code above its tests is byte for byte that of `96ad9d5`, so its hash is still `6BA4L1mo…`.
+
+**Assumptions, not shown here:**
+
+- `FINAL` means every receipt, including refunds, has finished, as the RPC documentation says. Codex's question on this stands.
+- The RPC node the checker asks reports the chain truthfully.
+- An archival node will still have the transaction when it is needed.
+- The operator runs the checker and follows a refusal. Nothing enforces that.
+
+**Steven's decisions, all still open:**
+
+- Withdrawals: accept the limit with the operational rule and lock, delay the lock, or cover withdrawals first. Claude recommends the first, and says why in reserved-recovery.md.
+- The redeploy, the demo run on the new build, and the lock, each as its own approval.
+- Push, making the repository public, and submission.
+
 ## NEAR-only audit (7 Nov 2026)
 
 Steven's decision: nearx402 stands on NEAR alone. Any multi-chain work waits until after the hackathon, and the team's other products are not used or named. The instruction is in `AGENTS.md`.
@@ -37,7 +121,7 @@ Every use of the old name in the earlier history was checked. It was this projec
 | --- | --- |
 | A transfer that executes after the balance read leaves `balance` above the tokens held, and `balance + reserved` not rising does not prove solvency | **Accepted. Claude's claim was too strong, and is withdrawn.** Claude reproduced it, with both claims, and two tests now pin it. No published ordering guarantee was found, so reachability is not shown either way. The answer is a precondition on the operator, not a longer wait: the transaction must be `FINAL`, and the transfer's outcome read |
 | Rehearse the old build, the new build, and the old build again, with no init | Done, below |
-| Withdrawals are not covered | Consequences written for Steven, in reserved-recovery.md |
+| Withdrawals are not covered | Consequences written for Steven, in reserved-recovery.md. **Corrected on 8 Nov:** this answer said the exposure stopped at one withdrawal. It does not, as the section above shows |
 
 **Contract logic did not change in this answer.** Outside the tests, only comments did, which moved lines and so changed the code hash.
 

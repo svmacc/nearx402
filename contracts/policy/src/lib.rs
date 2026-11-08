@@ -2011,4 +2011,78 @@ mod tests {
             }
         }
     }
+
+    // Withdrawals, which `reconcile_payment` does not cover: what lost
+    // `on_withdraw` callbacks leave. Written to check the claim that the exposure
+    // is one withdrawal's amount. It is not: each lost callback adds its own.
+
+    /// Starts a withdrawal whose callback never runs.
+    fn withdraw_and_lose_callback(c: &mut Contract, amount: U128) {
+        call_as(owner(), 0);
+        c.withdraw(amount);
+    }
+
+    #[test]
+    fn lost_withdraw_callbacks_add_up_in_reserved() {
+        let mut c = setup();
+        for _ in 0..3 {
+            withdraw_and_lose_callback(&mut c, usdc_cents(100));
+        }
+        assert_eq!(c.reserved, usdc_cents(300).0);
+        assert_eq!(c.balance, usdc_cents(700).0);
+        // Up to the whole balance.
+        withdraw_and_lose_callback(&mut c, usdc_cents(700));
+        assert_eq!((c.balance, c.reserved), (0, usdc_cents(1000).0));
+        // No log entry exists for `reconcile_payment` to close, and nothing else
+        // lowers `reserved`.
+        assert_eq!(c.get_log_length(), 0);
+        call_as(owner(), 0);
+        let text = refused(&mut c, |c| {
+            c.withdraw(U128(1));
+        });
+        assert!(text.contains("insufficient balance"), "{text}");
+    }
+
+    #[test]
+    fn lost_withdraw_callbacks_whose_tokens_moved_hide_later_plain_deposits() {
+        let mut c = setup();
+        withdraw_and_lose_callback(&mut c, usdc_cents(100));
+        withdraw_and_lose_callback(&mut c, usdc_cents(50));
+        // Both transfers reached finance, then finance sends 200 back by plain
+        // `ft_transfer`.
+        let held = usdc_cents(1000 - 150 + 200);
+        call_as(owner(), 0);
+        let seq = c.settle_seq;
+        c.sync_balance(usdc_cents(200));
+        assert_eq!(
+            sync(&mut c, seq, usdc_cents(200), Some(held)),
+            usdc_cents(50).0,
+            "150 of the 200 cannot be credited"
+        );
+    }
+
+    #[test]
+    fn a_lost_withdraw_callback_whose_tokens_moved_blocks_an_unmoved_claim() {
+        let mut c = setup();
+        withdraw_and_lose_callback(&mut c, usdc_cents(100));
+        // A payment whose transfer failed, and whose callback was lost too.
+        pay(&mut c, vendor(), usdc_cents(25));
+        let seq = c.settle_seq;
+        let held = usdc_cents(900);
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        let text = refused(&mut c, |c| {
+            finish_claim(c, 0, seq, Some(held));
+        });
+        assert!(text.contains("does not cover"), "{text}");
+        // Backing the lost withdrawal with a plain transfer, not synced, lets the
+        // true claim through.
+        claim(&mut c, 0, false, NANOS_PER_DAY);
+        let out = finish_claim(&mut c, 0, seq, Some(U128(held.0 + usdc_cents(100).0)));
+        assert_eq!(out.status, Status::Failed);
+        assert_eq!(
+            c.reserved,
+            usdc_cents(100).0,
+            "the withdrawal stays reserved"
+        );
+    }
 }

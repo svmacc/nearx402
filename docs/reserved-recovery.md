@@ -6,7 +6,7 @@
 
 A payment moves its amount from `balance` to `reserved`, then calls `ft_transfer`, then `on_pay_transfer` settles it. If that callback itself fails, nothing settles the payment. The entry stays `Pending`, and nothing lowers `reserved`. `set_zk_agent` clears the ZK agent's in-flight marker, but not `reserved`.
 
-**How likely:** low. The callback has a static 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas up front. No test makes a callback fail by itself. A protocol change in gas costs, or a bug in the callback, is what this guards against.
+**How likely: not measured.** What is known: the callback has a static 15 Tgas against a measured 2 Tgas, and `pay_zk` requires 90 Tgas up front. No test makes a callback fail by itself, so no rate can be given. A protocol change in gas costs, or a bug in the callback, is what this guards against.
 
 **Why it matters anyway:** once the contract is locked, code cannot be fixed.
 
@@ -47,6 +47,25 @@ A late `on_pay_transfer` panics, because the entry is no longer `Pending`, and c
 5. Call `reconcile_payment` with what step 3 showed.
 
 If the transaction cannot be found or is not `FINAL`, do not call it. There is no deadline: the stuck amount stays safely reserved.
+
+### The checker: `reconcile-check`
+
+Steps 2 to 4 are what `reconcile-check` does. **It is an operational control, not a contract guarantee: the contract itself still does not verify `FINAL`.** It has no signer and calls only the RPC methods `query`, `block` and `EXPERIMENTAL_tx_status`, so it cannot send anything.
+
+```text
+cargo run -p nearx402 --bin reconcile-check -- --policy nearx402-policy.testnet \
+    --log-id <id> --tx-hash <hash> --sender <agent> [--rpc <archival rpc>]
+```
+
+It reads the entry at `final` and the transaction with `wait_until: "FINAL"`, then matches the receipt graph and the action arguments, not events, since a failed callback emits none:
+
+- The entry is `Pending`, belongs to `--sender`, and is at least 24 hours old by a final block.
+- The transaction is `FINAL`, signed by `--sender`, to the policy, with one `pay` or `pay_zk` call whose vendor, amount and memo match the entry.
+- Every receipt has one outcome and every listed receipt is present. The receipt the transaction became succeeded and emitted one `payment_approved` with this id, timestamp, agent, vendor and amount.
+- Exactly one `ft_transfer` and one `on_pay_transfer` in the whole graph, both created by that receipt. The transfer is from the policy to the token, with the entry's vendor and amount, memo `nearx402:{id}` and 1 yoctoNEAR. The callback has arguments `{"id": id}` and takes its input from that transfer's data.
+- The callback's outcome is `Failure`.
+
+Then it prints the evidence and the recommended `tokens_moved`, from the transfer's outcome, and exits 0. **Anything else is a refusal, exit 3:** a timeout, which is not a failure, an unknown or pruned transaction, a missing or extra receipt, a mismatch, a transfer outcome that is neither `SuccessValue` nor `Failure`, or a callback that succeeded. The operator still sends the claim by hand.
 
 ## Codex's counterexample
 
@@ -89,16 +108,33 @@ The new power is labelling a stuck entry. The owner already controls `withdraw`,
 
 ## What it does not cover: withdrawals
 
-**Steven should weigh this before locking.** A withdrawal has no log entry, so nothing identifies one. Covering it needs a new field, and so a state migration.
+**Steven's decision, not yet made.** Nothing below accepts the limit on Steven's behalf.
+
+**Facts, from the code and from tests:**
+
+- `withdraw` moves its amount from `balance` to `reserved`, and only `on_withdraw` takes it out again. A withdrawal has no log entry, so `reconcile_payment` cannot close one.
+- **Lost callbacks add up.** An earlier version of this page said the exposure was limited to one withdrawal's amount. That was wrong: each lost callback leaves its own amount in `reserved`, up to the whole balance. The test `lost_withdraw_callbacks_add_up_in_reserved` shows it.
+- Only finance can start a withdrawal. The callback has the same static 15 Tgas as a payment's. How often a callback is lost is not measured.
 
 If the callback of a withdrawal is lost after locking, then **that amount stays in `reserved` for good**:
 
-| What happened to the transfer | Consequence after locking |
-| --- | --- |
-| Tokens reached finance | Finance has its tokens. `sync_balance` stays short by that amount for later plain deposits |
-| Tokens did not move | **Those tokens are stuck in the wallet permanently** |
+| What happened to the transfer | Consequence after locking | Test |
+| --- | --- | --- |
+| Tokens reached finance | Finance has its tokens. `sync_balance` cannot credit later plain deposits up to the sum of such withdrawals. Deposits through `ft_transfer_call` are credited as usual | `lost_withdraw_callbacks_whose_tokens_moved_hide_later_plain_deposits` |
+| Tokens reached finance | A `tokens_moved = false` claim for any payment is refused, because the token holds less than the contract counts. It goes through only after finance sends that amount back by plain transfer, not synced, which then stays reserved | `a_lost_withdraw_callback_whose_tokens_moved_blocks_an_unmoved_claim` |
+| Tokens did not move | **Those tokens are stuck in the wallet permanently** | `lost_withdraw_callbacks_add_up_in_reserved` |
 
-The exposure is limited to one withdrawal's amount, and only finance can start one. Finance can reduce it by withdrawing smaller amounts. The callback has the same static 15 Tgas as a payment's. Recommendation: accept and document this, since the likelihood is low and a migration would add risk just before a permanent step.
+**An operational rule that bounds it, which the contract does not enforce:** finance withdraws one amount at a time, and waits for the transaction to be `FINAL` with `on_withdraw` succeeded before the next. Then at most one withdrawal can be lost before finance notices and stops. `reconcile-check` does not check withdrawals.
+
+**Options for Steven:**
+
+| Option | What it means | Trust and demo |
+| --- | --- | --- |
+| Accept the limit, then lock | Redeploy, run the demo again, delete the policy's full-access key | The contract has no key, so nobody can change its code, and the limit is written down. The demo is the same |
+| Delay the lock | Redeploy, but keep the policy's full-access key for now | Whoever holds that key can replace the code, so the claim that nobody can change the rules cannot be made. That is a trust assumption on the team. A lost callback could then be fixed with new code. The demo is the same |
+| Cover withdrawals first | A new state field for pending withdrawals, and a state migration | The control in the rehearsal shows a plain redeploy fails once a field is added, so this needs a migration method, new tests and a new review before a permanent step. Not started, as Codex asked |
+
+**Claude's recommendation: accept the limit with the operational rule, then lock.** Not because the chance is known to be small, but because the exposure is then bounded by what finance chooses to withdraw, finance can keep the wallet's balance low, and a migration adds untested risk just before a permanent step. Delaying the lock is a reasonable choice if Steven prefers recoverability to the no-key claim.
 
 ## Deployment
 
@@ -132,5 +168,9 @@ Written first, and seen to fail on the old code: the unit tests did not compile,
 **Sandbox test, `crates/nearx402/tests/reserved_recovery.rs`.** It patches storage to leave the state a lost callback would leave, then runs the real contracts: a false claim refused by the real `ft_balance_of` read, a true claim of each kind, a settled entry, the age limit against real block time, and the private callback refused from outside.
 
 **Mutants:** 25 in `scripts/mutation-audit.py`. They do not cover `#[private]` on the new callback, which only the sandbox test checks.
+
+**The checker, `crates/nearx402/tests/reconcile_check.rs`.** The fixtures are three real `EXPERIMENTAL_tx_status` responses at `FINAL` from a sandbox: a payment whose transfer moved, one whose transfer failed, and a `pay_zk` payment whose transfer moved, with the `pay_zk` arguments cut down to vendor, amount and memo. As captured, each callback succeeded, and the checker refuses each. **No callback could be made to fail by itself**, so the accepted cases are those responses with one edit: the callback's status set to a `Failure` and the entry to `Pending`. Every refusal case is one further edit, applied to all three. The binary also runs against a live sandbox, where it refuses a settled entry, an unknown transaction, and an entry patched back to `Pending`, because the transaction contradicts it. A mutation run of the checker removed 22 checks one at a time: the first run left 3 alive, tests were added for them, and the second run killed all 22.
+
+**Withdrawals:** three unit tests, named in the table above.
 
 **Limits:** no callback was made to fail by itself, and the patched state stands in for one. The random test's claims are all truthful, because false claims have their own tests. Gas for `reconcile_payment` was not measured, beyond working with 100 Tgas attached. The new method has not run on testnet, and the runbook above has not been walked through on a real transaction.
