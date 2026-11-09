@@ -1,5 +1,5 @@
 {
-  "rpc_url": "https://rpc.testnet.near.org",
+  "rpc_url": "https://test.rpc.fastnear.com",
   "network_name": "near-testnet",
   "policy": "nearx402-policy.testnet",
   "token": "nearx402-musdc.testnet",

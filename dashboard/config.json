@@ -1,6 +1,12 @@
 {
   "policy": "nearx402-policy.testnet",
-  "rpc": "https://test.rpc.fastnear.com",
+  "agent": "nearx402-agent.testnet",
+  "token": "nearx402-musdc.testnet",
+  "expected_code_hash": "6BA4L1moNbXF8iUuZTzk4ag93cRwtE5mmqWBu83mQsTx",
+  "rpc": "https://near-testnet.drpc.org",
+  "rpc_fallback": ["https://test.rpc.fastnear.com", "https://testnet-rpc.intea.rs"],
   "network": "testnet",
-  "symbol": "mUSDC"
+  "symbol": "mUSDC",
+  "explorer": "https://testnet.nearblocks.io",
+  "repo": "https://github.com/svmacc/nearx402"
 }

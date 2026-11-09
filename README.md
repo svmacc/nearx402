@@ -1,5 +1,7 @@
 # nearx402
 
+**Private policy, public proof.** An AI agent on NEAR pays per x402 call only after the contract verifies a Groth16 proof that the spend is allowed. Hidden: the caps and the vendor allowlist. Public: the vendor and amount of every payment.
+
 A spend-policy wallet for AI agents that pay x402 APIs, settled on NEAR. Built at NEAR HACKATHON 2026.
 
 Giving an AI agent a wallet today means giving it the keys to everything. Here the agent gets **no funds and no general key**. A NEAR contract holds the money (USDC, NEP-141). The agent's only key can call one method: `pay`, or `pay_zk` in private mode. The contract checks the finance team's rules and transfers to the vendor itself. Every payment and every attempt the policy blocks lands in an on-chain audit log. A call that reverts, such as malformed input or an already frozen agent, writes nothing.
@@ -48,7 +50,7 @@ The 8 Nov run, each transaction `FINAL` with no failed receipt:
 
 **What stays public:** the recipient and amount of every payment, and of every rejected attempt. A paid vendor is visibly allowed, and a day's payments are a lower bound on the cap. A compromised agent can read the policy, because it must hold it to prove. The trusted setup is local, so it is not production-safe.
 
-**Dashboard.** [`dashboard/index.html`](dashboard/index.html) is a static page that reads the contract through public RPC: balance, the day's total, every log entry, and each agent's breaker count. It holds no key. `dashboard/config.json` points it at `nearx402-policy.testnet`, so opening the folder with any static server shows testnet as it is now, and the `?policy=`, `?rpc=` and `?symbol=` query parameters override it. [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes the same folder to GitHub Pages at `https://svmacc.github.io/nearx402/` once Pages is set to "GitHub Actions" in the repository settings.
+**Dashboard.** [`dashboard/index.html`](dashboard/index.html) is a static page that reads the contract through public RPC: balance, the day's total, every log entry, and each agent's breaker count. It holds no key. Its first panel verifies the deployment from the chain on every refresh: the code hash against the one above, that the agent's only key is a function-call key limited to `pay_zk`, that the contract still has a full-access key (shown as a warning, since it is not locked), that the verifying key is set, and the owner and token. `dashboard/transactions.json` links the log entries of the recorded runs to their transactions. `dashboard/config.json` points it at `nearx402-policy.testnet`, so opening the folder with any static server shows testnet as it is now, and the `?policy=`, `?rpc=` and `?symbol=` query parameters override it. It is live at **https://nearx402.svmtech.xyz/**, served as static files by nginx on the team's VM; how that was set up, and how the facilitator would be hosted next to it: [docs/deploy-vm.md](docs/deploy-vm.md). [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes the same folder to GitHub Pages at `https://svmacc.github.io/nearx402/` once Pages is set to "GitHub Actions" in the repository settings.
 
 ## The core demo: public limits (no accounts, no funds)
 
@@ -200,7 +202,7 @@ Known limits (from our own reviews; there is no third-party audit). More are in 
 | `deploy/` | Template for the configuration `demo-zk --network testnet` reads |
 | `docs/` | [Threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), [ZK policy](docs/zk-policy.md), [testnet plan](docs/testnet.md), [review status](docs/review/status.md), [demo script](docs/demo-script.md), [`reserved` recovery proposal](docs/reserved-recovery.md) |
 | `dashboard/index.html` | Finance dashboard: balance, spend vs cap, approved vendors, audit log, CSV export. Reads the contract over RPC. Works against testnet with `?policy=<id>&rpc=<url>` |
-| `scripts/` | `build-contracts.sh`, `demo.sh`, `demo-zk.sh`, `mutation-audit.py` |
+| `scripts/` | `build-contracts.sh`, `demo.sh`, `demo-zk.sh`, `mutation-audit.py`, and `build-docs.py`, which renders this README and `docs/` to `dashboard/docs/` as the site's documentation pages (no dependencies; `python3 scripts/build-docs.py`) |
 
 ## Build and test
 

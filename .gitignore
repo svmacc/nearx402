@@ -8,3 +8,5 @@ redeemed.tmp
 .zx402/
 # Your real deployment; deploy/testnet.example.json is the template.
 deploy/testnet.json
+# Built by scripts/build-docs.py from README.md and docs/; the Pages workflow rebuilds it.
+dashboard/docs/

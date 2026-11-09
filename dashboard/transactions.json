@@ -1,0 +1,9 @@
+[
+  { "log_id": 0, "tx_hash": "ErMc9bfwTJSTQXDtf1c7QM73vUHESQN8DR8KvSucFMw5", "note": "7 Nov, earlier build: pays the vendor 0.05 mUSDC" },
+  { "log_id": 1, "tx_hash": "7Jq2vy4wy5qAdn86oWf7PThmi4mu4dbeaJKLSLvK6Nx7", "note": "7 Nov: proves with the attacker named, blocked" },
+  { "log_id": 2, "tx_hash": "4P8DhKWGm46FEvp2SdSR3uuNg8hxU63kVhH5CmFL3Cti", "note": "7 Nov: valid proof sent to the attacker, blocked" },
+  { "log_id": 3, "tx_hash": "5txs2D6S8jXhguVRfiwBrZxXc2kvvM21gmgEGQsJVq1s", "note": "8 Nov, failed take: paid on chain, the vendor never served it, never retried" },
+  { "log_id": 4, "tx_hash": "G46TzNiacRWn9JtxKr3ucLRfotLLM7FoGNeeeN5eHeL", "note": "8 Nov, recorded run: pays the vendor 0.05 mUSDC, 41.44 Tgas" },
+  { "log_id": 5, "tx_hash": "AWM9KTdm2V9hmPbZyk6fEzbjuv6Up5WRt1V1RdAgtbqV", "note": "8 Nov, recorded run: proves with the attacker named, blocked, 36.19 Tgas" },
+  { "log_id": 6, "tx_hash": "248x4Q8gaKTt8aUE36duxFy2FaBLrjBtSxTPxePqwRmS", "note": "8 Nov, recorded run: valid proof sent to the attacker, blocked, 36.22 Tgas" }
+]

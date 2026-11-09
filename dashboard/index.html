@@ -4,82 +4,207 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nearx402 Spend Policy</title>
+<meta name="description" content="Read-only dashboard of the nearx402 spend-policy contract: balance, agents, audit log and deployment checks, read live from NEAR RPC.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f96736'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' font-weight='700' fill='%23110c08' text-anchor='middle'%3E402%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+  /* Look: near.com's canvas (white, framed centre column, Figtree, hairlines, dark pill buttons)
+     with the svmtech identity (orange #f96736 accent, JetBrains Mono for numbers and hashes,
+     the svm/tech wordmark, and svmtech's warm dark palette in dark mode). Status colours are
+     reserved for outcomes and never reused for decoration. */
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --text: #16181d; --muted: #5d6470; --line: #e3e6eb;
-    --paid: #137a4b; --paid-bg: #e3f5ec; --blocked: #b42318; --blocked-bg: #fde8e6;
+    --bg: #ffffff; --panel: #ffffff; --panel-2: #fafafa; --text: #171717; --muted: #737373; --line: #e5e5e5;
+    --paid: #0f7a4b; --paid-bg: #e2f6ec; --blocked: #b42318; --blocked-bg: #fde8e6;
     --pending: #8a5a00; --pending-bg: #fff3d6; --failed: #6b3fa0; --failed-bg: #f0e8fa;
-    --accent: #2f5bd3; --bar: #2f5bd3; --bar-bg: #e8ecf5;
+    --accent: #f96736; --accent-ink: #c94a1e; --bar: #f96736; --bar-bg: #f3f0ee; --chain: #0f7a4b; --chain-bg: #e2f6ec;
+    --btn: #171717; --btn-text: #ffffff; --band: #fff3ec;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1115; --panel: #171a21; --text: #e8eaee; --muted: #9aa1ad; --line: #2a2f39;
-      --paid: #5fd49a; --paid-bg: #12301f; --blocked: #ff8a80; --blocked-bg: #3a1614;
+      --bg: #110c08; --panel: #1b1510; --panel-2: #16110d; --text: #f8f8f8; --muted: #a69c95; --line: #342c26;
+      --paid: #5fd49a; --paid-bg: #14301f; --blocked: #ff8a80; --blocked-bg: #3a1614;
       --pending: #f5c26b; --pending-bg: #33270d; --failed: #c9a6f5; --failed-bg: #2a1d3d;
-      --accent: #7c9cff; --bar: #7c9cff; --bar-bg: #262c3a;
+      --accent: #f96736; --accent-ink: #ff8a5c; --bar: #f96736; --bar-bg: #2a211b; --chain: #5fd49a; --chain-bg: #14301f;
+      --btn: #f8f8f8; --btn-text: #110c08; --band: #1a110c;
     }
   }
   * { box-sizing: border-box; }
+  html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
-  h1 { font-size: 20px; margin: 0; }
-  .sub { color: var(--muted); font-size: 13px; }
-  main { padding: 8px 24px 32px; display: grid; gap: 16px; max-width: 1200px; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-  .tile, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
-  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  .tile .v { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .panel h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .bar { height: 8px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; margin: 6px 0 2px; }
+         font: 15px/1.5 "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent-ink); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* The framed centre column, as on near.com */
+  .frame { max-width: 1160px; width: 100%; margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); min-height: 100vh; }
+  header, main, footer { width: 100%; }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding: 16px 32px; border-bottom: 1px solid var(--line); }
+  .wordmark { font-size: 22px; font-weight: 700; letter-spacing: -.03em; color: var(--text); white-space: nowrap; }
+  .wordmark em { font-style: italic; color: var(--accent); }
+  .wordmark small { font-weight: 500; color: var(--muted); font-size: 13px; margin-left: 10px; letter-spacing: 0; }
+  .status { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+  .status .mono { font-size: 12px; }
+  .hero { padding: 48px 32px 36px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, var(--band), var(--bg) 70%); }
+  .eyebrow { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 14px; }
+  h1 { font-size: 52px; line-height: 1.02; font-weight: 500; letter-spacing: -.035em; margin: 0 0 14px; max-width: 760px; }
+  .lede { color: var(--muted); max-width: 720px; margin: 0; font-size: 18px; line-height: 1.5; }
+  .lede strong { color: var(--text); font-weight: 500; }
+  .hero .sub { margin-top: 18px; }
+  .sub { color: var(--muted); font-size: 13.5px; }
+  main { padding: 24px 32px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+  .tile { background: var(--panel-2); }
+  .tile .k { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .tile .v { font-size: 30px; font-weight: 500; letter-spacing: -.03em; margin-top: 6px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .tile .s { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .panel h2 { font-size: 18px; font-weight: 500; letter-spacing: -.02em; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .panel h2 .sub { font-weight: 400; }
+  .bar { height: 6px; background: var(--bar-bg); border-radius: 3px; overflow: hidden; margin: 6px 0 2px; }
   .bar > div { height: 100%; background: var(--bar); }
-  .agent { padding: 8px 0; border-top: 1px solid var(--line); }
+  .bar.warn > div { background: var(--blocked); }
+  .agent { padding: 10px 0; border-top: 1px solid var(--line); }
   .agent:first-of-type { border-top: 0; }
   .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; border-top: 0; white-space: nowrap; }
+  th, td { text-align: left; padding: 10px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; border-top: 0; white-space: nowrap; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .Paid { color: var(--paid); background: var(--paid-bg); }
   .Blocked { color: var(--blocked); background: var(--blocked-bg); }
   .Pending { color: var(--pending); background: var(--pending-bg); }
   .Failed { color: var(--failed); background: var(--failed-bg); }
+  .Private { color: var(--accent-ink); background: var(--bar-bg); }
+  .Chain { color: var(--chain); background: var(--chain-bg); }
+  .Http { color: var(--muted); background: var(--bar-bg); }
   tr.row-Blocked td { background: color-mix(in srgb, var(--blocked-bg) 45%, transparent); }
   .reason { color: var(--blocked); }
-  button { font: inherit; color: var(--accent); background: transparent; border: 1px solid var(--line);
-           border-radius: 8px; padding: 5px 12px; cursor: pointer; }
-  button:hover { border-color: var(--accent); }
+  .why { color: var(--muted); font-size: 12px; display: block; }
+  button { font: inherit; font-weight: 500; font-size: 13.5px; color: var(--text); background: transparent; border: 1px solid var(--line);
+           border-radius: 10px; padding: 6px 13px; cursor: pointer; }
+  button:hover { border-color: var(--text); }
+  button[aria-pressed="true"], button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; }
   .err { color: var(--blocked); }
-  .two { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
-  .two-even { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .Private { color: var(--accent); background: var(--bar-bg); }
+  .two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; }
+  .two-even { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
   .note { margin-top: 8px; }
-  h3 { font-size: 13px; margin: 0 0 4px; }
-  #privacy p { margin: 0 0 8px; }
-  #privacy ul { margin: 0 0 8px; padding-left: 18px; }
+  h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  h3 + h3, p + h3, pre + h3 { margin-top: 14px; }
+
+  /* Try it: a read-only query box */
+  .try-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  select, input[type="text"] { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 0; }
+  select { flex: 0 1 200px; }
+  input[type="text"] { flex: 1 1 220px; font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+  pre.out { margin: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.45;
+            white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; }
+  pre.out.err { border-color: var(--blocked); }
+  p { margin: 0 0 8px; }
+  ul { margin: 0 0 8px; padding-left: 18px; }
+  code { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   [hidden] { display: none !important; }
-  @media (max-width: 800px) { .two, .two-even { grid-template-columns: 1fr; } header, main { padding-left: 16px; padding-right: 16px; } }
+
+  /* Deployment checks */
+  .checks { display: grid; gap: 0; }
+  .check { display: grid; grid-template-columns: 26px 170px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
+  .check:first-child { border-top: 0; }
+  .check .ic { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .ok .ic { color: var(--paid); background: var(--paid-bg); }
+  .warn .ic { color: var(--pending); background: var(--pending-bg); }
+  .bad .ic { color: var(--blocked); background: var(--blocked-bg); }
+  .wait .ic { color: var(--muted); background: var(--bar-bg); }
+  .check .k { color: var(--muted); font-size: 13px; font-weight: 500; padding-top: 2px; }
+  .check .d { min-width: 0; overflow-wrap: anywhere; }
+  .check .d .mono { word-break: break-all; }
+  .tile .v { overflow-wrap: anywhere; }
+
+  /* Flow strip */
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .step { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; position: relative; background: var(--panel-2); }
+  .step .n { font: 600 12px/22px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; width: 22px; height: 22px; text-align: center; border-radius: 50%; border: 2px solid var(--text); display: inline-block; margin-bottom: 6px; }
+  .step .t { font-weight: 600; margin-bottom: 2px; }
+  .step .d { color: var(--muted); font-size: 12.5px; }
+  .step .badge { position: absolute; top: 10px; right: 10px; }
+  .step.chain { border-color: var(--chain); }
+
+  /* Money flow: a Sankey of the log, agent -> outcome -> recipient */
+  .sankey-wrap { width: 100%; overflow: hidden; }
+  #sankey { display: block; width: 100%; height: auto; font-size: 12px; }
+  #sankey text { fill: var(--text); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+  #sankey text.sub { fill: var(--muted); font-size: 11px; }
+  #sankey .link { opacity: .35; transition: opacity .15s; }
+  #sankey .link:hover { opacity: .7; }
+  #sankey .pulse { fill: none; stroke-width: 1.5; stroke-dasharray: 4 10; pointer-events: none; }
+  #sankey .pulse.moving { animation: flow 1.6s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -14; } }
+  @media (prefers-reduced-motion: reduce) { #sankey .pulse.moving { animation: none; } }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  footer { padding: 18px 32px 28px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap; align-items: baseline; }
+  footer .wordmark { font-size: 16px; }
+  @media (max-width: 1200px) { .frame { border-left: 0; border-right: 0; } }
+  @media (max-width: 800px) {
+    .two, .two-even { grid-template-columns: minmax(0, 1fr); }
+    nav, .hero, main, footer { padding-left: 16px; padding-right: 16px; }
+    .hero { padding-top: 32px; padding-bottom: 28px; }
+    h1 { font-size: 36px; }
+    .lede { font-size: 16px; }
+    .check { grid-template-columns: 26px 1fr; }
+    .check .d { grid-column: 2; }
+  }
 </style>
 </head>
 <body>
+<div class="frame">
 <header>
-  <div>
-    <h1>nearx402 Spend Policy</h1>
-    <div class="sub">Policy contract <span class="mono" id="policy">…</span> on <span id="network">…</span></div>
+  <nav>
+    <div class="wordmark">near<em>x402</em><small>spend-policy wallet for AI agents on NEAR</small></div>
+    <div class="status">
+      <a href="docs/">Docs</a>
+      <span class="sub" id="updated">Loading…</span>
+      <span class="sub mono" id="block"></span>
+      <span><button id="auto" type="button" aria-pressed="true">Auto-refresh on</button> <button id="refresh" type="button">Refresh now</button></span>
+    </div>
+  </nav>
+  <div class="hero">
+    <div class="eyebrow">x402, redefined</div>
+    <h1>Private policy, public proof.</h1>
+    <p class="lede">An AI agent on NEAR pays per x402 call only after the contract verifies a Groth16 proof that the spend is allowed. <strong>The contract, not the agent, holds the money.</strong> Hidden: the caps and the vendor allowlist. Public: the vendor and amount of every payment.</p>
+    <div class="sub">Policy contract <a class="mono" id="policy-link" href="#"><span id="policy">…</span></a> on <span id="network">…</span> · read-only, this page holds no key · RPC <span class="mono" id="rpc-host">…</span></div>
   </div>
-  <div class="sub" id="updated">Loading…</div>
 </header>
 <main>
+  <section class="panel">
+    <h2>Verify the deployment <span class="sub">every row is read from the chain at <code>final</code>; nothing here is typed in</span></h2>
+    <div class="checks" id="checks"><div class="check wait"><span class="ic">…</span><span class="k">Reading</span><span class="d sub">Waiting for the first RPC answer.</span></div></div>
+  </section>
+
   <section class="tiles">
-    <div class="tile"><div class="k">Wallet balance</div><div class="v" id="t-balance">–</div></div>
-    <div class="tile"><div class="k">Paid today</div><div class="v" id="t-paid">–</div></div>
-    <div class="tile"><div class="k">Payments</div><div class="v" id="t-count">–</div></div>
-    <div class="tile"><div class="k">Blocked attempts</div><div class="v" id="t-blocked">–</div></div>
+    <div class="tile"><div class="k">Wallet balance</div><div class="v" id="t-balance">–</div><div class="s">held by the contract, not the agent</div></div>
+    <div class="tile"><div class="k">Paid today</div><div class="v" id="t-paid">–</div><div class="s" id="t-paid-s">UTC day</div></div>
+    <div class="tile"><div class="k">Payments</div><div class="v" id="t-count">–</div><div class="s">token transfers that settled</div></div>
+    <div class="tile"><div class="k">Blocked attempts</div><div class="v" id="t-blocked">–</div><div class="s">logged on chain, no transfer</div></div>
+    <div class="tile"><div class="k">Circuit breaker</div><div class="v" id="t-breaker">–</div><div class="s" id="t-breaker-s">blocked today / limit</div></div>
+  </section>
+
+  <section class="panel" id="sankey-panel">
+    <h2>Where the money went <span class="sub">every ribbon is drawn from the contract's own log; width is mUSDC, hover for the count</span></h2>
+    <div class="sankey-wrap"><svg id="sankey" role="img" aria-label="Flow of each logged attempt from the agent, through its outcome, to the account it named"></svg></div>
+    <div class="legend" id="sankey-legend">
+      <span><i class="dot" style="background:var(--paid)"></i><strong>Paid</strong>: the contract transferred it to that vendor. The moving dashes are the tokens that moved.</span>
+      <span><i class="dot" style="background:var(--blocked)"></i><strong>Blocked</strong>: what the attempt asked for. The proof failed, nothing moved, the attempt is on chain.</span>
+      <span><i class="dot" style="background:var(--failed)"></i><strong>Other</strong>: the transfer failed or is still in flight; the budget was restored.</span>
+    </div>
+    <div class="sub note" id="sankey-note"></div>
   </section>
 
   <section class="two">
@@ -92,6 +217,38 @@
       <div class="chips" id="vendors"></div>
       <div class="sub note" id="vendors-note"></div>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>How one payment is decided <span class="sub">two NEAR transactions, the rest is HTTP</span></h2>
+    <div class="flow">
+      <div class="step"><span class="badge Http">HTTP</span><span class="n">1</span><div class="t">402 from the vendor</div><div class="d">Price, token and a nonce that lives five minutes.</div></div>
+      <div class="step"><span class="badge Http">local</span><span class="n">2</span><div class="t">Agent proves</div><div class="d">A Groth16 proof that the payment fits its cap, per-call limit and allowlist. About 200 ms, 256 bytes.</div></div>
+      <div class="step chain"><span class="badge Chain">NEAR</span><span class="n">3</span><div class="t">Contract verifies and pays</div><div class="d"><code>pay_zk</code>: the proof is checked on chain, then the contract itself transfers the tokens and writes the log entry.</div></div>
+      <div class="step"><span class="badge Http">HTTP</span><span class="n">4</span><div class="t">Agent retries with a receipt</div><div class="d">Contract id, log number, nonce, transaction hash and a secret only the agent knows.</div></div>
+      <div class="step"><span class="badge Http">reads NEAR</span><span class="n">5</span><div class="t">Facilitator checks</div><div class="d">Code hash, log entry, token transfer event, nonce and receipt secret. It holds no key and sends nothing.</div></div>
+      <div class="step"><span class="badge Http">HTTP</span><span class="n">6</span><div class="t">200, once</div><div class="d">The same receipt again gets 402: already redeemed.</div></div>
+    </div>
+    <div class="legend"><span>A blocked attempt stops at step 3: the proof fails, nothing moves, the attempt is logged.</span><span>Five blocked attempts in one UTC day freeze the agent.</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>Audit log
+      <span class="filters" role="group" aria-label="Filter">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="Paid" aria-pressed="false">Paid</button>
+        <button type="button" data-f="Blocked" aria-pressed="false">Blocked</button>
+        <button type="button" data-f="other" aria-pressed="false">Other</button>
+        <button id="csv" type="button">Export CSV</button>
+      </span>
+    </h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Time (UTC)</th><th>Agent</th><th>Vendor</th><th class="num">Amount</th><th>Status</th><th>Detail</th><th>Memo</th><th>Transaction</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+    <div class="sub note" id="log-note"></div>
   </section>
 
   <section class="panel" id="privacy" hidden>
@@ -119,112 +276,431 @@
     </div>
   </section>
 
-  <section class="panel">
-    <h2>Audit log <button id="csv" type="button">Export CSV</button></h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>#</th><th>Time</th><th>Agent</th><th>Vendor</th><th class="num">Amount</th><th>Status</th><th>Detail</th><th>Transaction</th></tr></thead>
-        <tbody id="log"></tbody>
-      </table>
+  <section class="panel" id="try">
+    <h2>Try it <span class="sub">three ways, none needs an account</span></h2>
+    <div class="two-even">
+      <div>
+        <h3>1. Ask the contract, right here</h3>
+        <p class="sub">A read-only call to the policy contract through the same public RPC this page uses. Nothing is signed, nothing is sent to the team.</p>
+        <div class="try-row">
+          <select id="q-method" aria-label="view method"></select>
+          <input id="q-args" type="text" value="{}" aria-label="arguments, JSON" spellcheck="false">
+          <button id="q-run">Query</button>
+        </div>
+        <pre class="out mono" id="q-out">Pick a method and press Query. The answer is the contract's raw JSON.</pre>
+        <h3>The same call from a terminal, or from an agent</h3>
+        <pre class="out mono" id="q-curl"></pre>
+        <p class="sub">The RPC returns <code>result</code> as the UTF-8 bytes of that JSON. Every method in the list is the contract's read API; the one write method an agent uses is <code>pay_zk</code>.</p>
+      </div>
+      <div>
+        <h3>2. Run the whole flow on your machine</h3>
+        <p>From a clone, with no accounts and no funds, <code>scripts/demo-zk.sh</code> starts a local NEAR sandbox and plays agent, vendor and attacker: one paid call, the replay rejected, two attacks blocked. It exits non-zero if any outcome differs from the README's table. With <code>--network testnet</code> it runs the same story against the contract above, using the agent key and the policy that the team holds; the recorded transactions below came from that.</p>
+        <h3>3. Pay as the agent</h3>
+        <p>Paying needs two things this page does not have: the agent's function-call key and the private policy values the proof is built from. Publishing them would publish the policy, the one thing this design keeps private. So on testnet the recorded transactions are the evidence, the sandbox demo makes you the agent on your own machine, and the owner account can register a further agent with its own policy for anyone who wants to run one against this contract.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="verify-yourself">
+    <h2>Check it yourself</h2>
+    <div class="two-even">
+      <div>
+        <h3>On the explorer</h3>
+        <ul id="explorer-links"><li class="sub">No explorer for this network.</li></ul>
+        <h3>Recorded transactions</h3>
+        <ul id="recorded"><li class="sub">None listed for this run.</li></ul>
+      </div>
+      <div>
+        <h3>Stated plainly</h3>
+        <ul>
+          <li>The testnet contract is <strong>not locked</strong>: the key holder can replace its code. The policy holds against the agent, not against the team.</li>
+          <li>The circuit has no third-party audit and its setup ran on one machine.</li>
+          <li>The token is a mock with no value. This is a hackathon build.</li>
+        </ul>
+        <p class="sub" id="repo-line"></p>
+      </div>
     </div>
   </section>
 </main>
+<footer><span>nearx402 · built at NEAR HACKATHON 2026 · this page reads the chain and writes nothing</span><span class="wordmark">svm<em>tech</em></span></footer>
+</div>
 <script>
 "use strict";
 let cfg = null;
 let lastLog = [];
+let lastData = null;
+let filter = "all";
+let timer = null;
 
 const $ = (id) => document.getElementById(id);
 // Keeps every significant digit, so 0.049999 never displays as 0.05.
 const money = (base) => (Number(BigInt(base)) / 1e6).toFixed(6).replace(/0{1,4}$/, "") + " " + cfg.symbol;
+const near = (yocto) => (Number(BigInt(yocto) / 10n ** 18n) / 1e6).toFixed(3) + " NEAR";
 const shortHash = (s) => s.length > 14 ? s.slice(0, 8) + "…" + s.slice(-4) : s;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const time = (ns) => new Date(Number(BigInt(ns) / 1000000n)).toLocaleTimeString();
+const ms = (ns) => Number(BigInt(ns) / 1000000n);
+const utc = (ns) => new Date(ms(ns)).toISOString().replace("T", " ").slice(0, 19);
+const explorer = (kind, id) => cfg.explorer ? `${cfg.explorer}/${kind}/${encodeURIComponent(id)}` : null;
+const link = (kind, id, text) => { const u = explorer(kind, id); return u ? `<a class="mono" href="${esc(u)}" target="_blank" rel="noopener">${esc(text ?? id)}</a>` : `<span class="mono">${esc(text ?? id)}</span>`; };
 
-async function view(method, args = {}) {
-  const res = await fetch(cfg.rpc, {
+// Every read is a single JSON-RPC `query` at `final`, which is the only method
+// the demo's proxy forwards. Account and key reads do not need a contract call.
+// Public RPCs rate-limit per IP and answer 429 without CORS headers, which the
+// browser reports as a failed fetch; on that, or any network failure, the next
+// reads go to the next RPC from config.json (`rpc_fallback`, one URL or a list),
+// and the primary is tried again five minutes later.
+let rpcIndex = 0, rpcSwitchedAt = 0;
+const rpcList = () => [cfg.rpc, ...[].concat(cfg.rpc_fallback ?? [])].filter(Boolean);
+function showRpc() {
+  const u = rpcList()[rpcIndex];
+  try { $("rpc-host").textContent = new URL(u, location.href).host; } catch { $("rpc-host").textContent = u; }
+}
+async function rpcOnce(url, params) {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0", id: "dash", method: "query",
-      params: { request_type: "call_function", finality: "optimistic", account_id: cfg.policy,
-                method_name: method, args_base64: btoa(JSON.stringify(args)) },
-    }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: "dash", method: "query", params: { finality: "final", ...params } }),
   });
+  if (res.status === 429) throw Object.assign(new Error("rate-limited by the RPC"), { transient: true });
   const json = await res.json();
+  if (json.error?.code === -429) throw Object.assign(new Error("rate-limited by the RPC"), { transient: true });
   if (json.error || json.result?.error) throw new Error(JSON.stringify(json.error ?? json.result.error));
-  return JSON.parse(new TextDecoder().decode(new Uint8Array(json.result.result)));
+  return json.result;
 }
+async function rpc(params) {
+  const list = rpcList();
+  if (rpcIndex > 0 && Date.now() - rpcSwitchedAt > 300000) { rpcIndex = 0; showRpc(); }
+  for (let attempt = 0; attempt < list.length; attempt++) {
+    const url = list[rpcIndex];
+    try { return await rpcOnce(url, params); }
+    catch (err) {
+      // TypeError: the fetch itself failed (network, or a 429 with no CORS headers). SyntaxError: not JSON.
+      const transient = err.transient || err.name === "TypeError" || err.name === "SyntaxError";
+      if (!transient || list.length < 2) throw err;
+      if (list[rpcIndex] === url) { rpcIndex = (rpcIndex + 1) % list.length; rpcSwitchedAt = Date.now(); showRpc(); }
+    }
+  }
+  throw new Error("every RPC refused or rate-limited the request; retrying");
+}
+async function view(method, args = {}, account = cfg.policy) {
+  const r = await rpc({ request_type: "call_function", account_id: account, method_name: method, args_base64: btoa(JSON.stringify(args)) });
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(r.result)));
+}
+const viewAccount = (account) => rpc({ request_type: "view_account", account_id: account });
+const viewKeys = (account) => rpc({ request_type: "view_access_key_list", account_id: account });
 
-async function allLog() {
-  const total = await view("get_log_length");
+async function logUpTo(total) {
   const out = [];
   for (let from = 0; from < total; from += 100) out.push(...await view("get_log", { from_index: from, limit: 100 }));
   return out;
 }
 
-function render(balance, agents, zkAgents, vendors, log, txs) {
-  const today = Math.floor(Date.now() / 86400000);
-  const paidToday = log.filter((e) => e.status === "Paid" && Math.floor(Number(BigInt(e.timestamp) / 1000000n) / 86400000) === today)
-                       .reduce((s, e) => s + BigInt(e.amount), 0n);
+function check(state, k, d) { return `<div class="check ${state}"><span class="ic">${{ ok: "✓", warn: "!", bad: "✗", wait: "…" }[state]}</span><span class="k">${esc(k)}</span><span class="d">${d}</span></div>`; }
+
+function keyLine(k) {
+  const p = k.access_key.permission;
+  if (p === "FullAccess") return `<span class="mono">${esc(shortHash(k.public_key))}</span> · full access`;
+  const f = p.FunctionCall;
+  const methods = f.method_names.length ? f.method_names.map((m) => `<code>${esc(m)}</code>`).join(", ") : "any method";
+  const allowance = f.allowance == null ? "no gas allowance limit" : `${near(f.allowance)} of gas allowance left`;
+  return `<span class="mono">${esc(shortHash(k.public_key))}</span> · function-call key on <span class="mono">${esc(f.receiver_id)}</span>, ${methods}, ${allowance}`;
+}
+
+function renderChecks({ account, policyKeys, agentKeys, owner, token, vk }) {
+  const rows = [];
+  const hash = account.code_hash;
+  if (cfg.expected_code_hash) {
+    const same = hash === cfg.expected_code_hash;
+    rows.push(check(same ? "ok" : "bad", "Code on chain",
+      `<span class="mono">${esc(hash)}</span><span class="why">${same ? "Matches the build recorded in docs/testnet.md and the README." : `Differs from the recorded build <span class="mono">${esc(cfg.expected_code_hash)}</span>: the contract was redeployed since the docs were written.`}</span>`));
+  } else {
+    rows.push(check("ok", "Code on chain", `<span class="mono">${esc(hash)}</span><span class="why">No expected hash is configured for this network, so this is the observed value only.</span>`));
+  }
+
+  const full = policyKeys.keys.filter((k) => k.access_key.permission === "FullAccess").length;
+  rows.push(check(full === 0 ? "ok" : "warn", "Contract keys",
+    full === 0
+      ? `No full-access key: the code cannot be replaced.<span class="why">Locked.</span>`
+      : `${full} full-access key${full > 1 ? "s" : ""} on <span class="mono">${esc(cfg.policy)}</span>.<span class="why">Not locked, by the team's choice: whoever holds that key can replace the code. The policy holds against the agent, not against the key holder.</span>`));
+
+  if (cfg.agent) {
+    if (!agentKeys) {
+      rows.push(check("bad", "Agent key", `Could not read the keys of <span class="mono">${esc(cfg.agent)}</span>.`));
+    } else {
+      const keys = agentKeys.keys;
+      const onlyPayZk = keys.length === 1 && keys[0].access_key.permission !== "FullAccess"
+        && keys[0].access_key.permission.FunctionCall.receiver_id === cfg.policy
+        && keys[0].access_key.permission.FunctionCall.method_names.join() === "pay_zk";
+      rows.push(check(onlyPayZk ? "ok" : "bad", "Agent key",
+        `<span class="mono">${esc(cfg.agent)}</span> has ${keys.length} key${keys.length === 1 ? "" : "s"}:<br>${keys.map(keyLine).join("<br>")}<span class="why">${onlyPayZk ? "One key, limited to pay_zk on the policy contract. It cannot transfer tokens, add keys or call anything else." : "Expected exactly one function-call key limited to pay_zk on the policy contract."}</span>`));
+    }
+  }
+
+  rows.push(check(vk ? "ok" : "warn", "Verifying key", vk ? `Set on the contract.<span class="why">Groth16 on BN254, checked with NEAR's alt_bn128 host functions inside pay_zk.</span>` : `Not set: pay_zk cannot verify proofs yet.`));
+
+  const tokenOk = !cfg.token || token === cfg.token;
+  rows.push(check(tokenOk ? "ok" : "bad", "Owner and token",
+    `Owner ${link("address", owner)} · token ${link("address", token)}<span class="why">${tokenOk ? "The owner sets policies and can withdraw; the agent can do neither. The token is the only NEP-141 the contract accepts." : `Expected token <span class="mono">${esc(cfg.token)}</span>.`}</span>`));
+
+  $("checks").innerHTML = rows.join("");
+  $("block").textContent = `block ${account.block_height} · ${shortHash(account.block_hash)}`;
+}
+
+function reasonWhy(reason) {
+  if (!reason) return "";
+  if (reason === "invalid proof") return "The agent could not prove this payment fits its policy. Which rule failed stays private.";
+  if (reason === "agent is frozen") return "The circuit breaker had already tripped that day.";
+  if (reason.startsWith("insufficient")) return "More than the contract holds.";
+  if (/reconcil/i.test(reason)) return "Closed by the owner on a stated claim, not by a receipt result.";
+  return "";
+}
+
+// Sankey of the log: agent -> outcome -> the account the attempt named. Widths
+// are the amounts in the log entries, so a Blocked ribbon is what was asked for,
+// not what moved. Hand-drawn SVG, no library: three columns, cubic ribbons.
+const STATUS_ORDER = ["Paid", "Failed", "Pending", "Blocked"];
+const statusColor = (s) => s === "Paid" ? "var(--paid)" : s === "Blocked" ? "var(--blocked)" : s === "Pending" ? "var(--pending)" : "var(--failed)";
+function renderSankey(log) {
+  const svg = $("sankey"), note = $("sankey-note");
+  const entries = log.filter((e) => e.amount && BigInt(e.amount) > 0n && e.agent_id && e.vendor);
+  if (!entries.length) { svg.innerHTML = ""; svg.setAttribute("viewBox", "0 0 10 1"); note.textContent = "Nothing in the log yet."; return; }
+  const W = Math.max(320, svg.parentElement.clientWidth || 800), narrow = W < 640, H = narrow ? 300 : 320;
+  const amt = (e) => Number(BigInt(e.amount)) / 1e6;
+  const add = (map, k, e) => { const m = map.get(k) ?? { v: 0, n: 0 }; m.v += amt(e); m.n += 1; map.set(k, m); };
+  const cols = [new Map(), new Map(), new Map()], l1 = new Map(), l2 = new Map(), dominant = new Map();
+  for (const e of entries) {
+    add(cols[0], e.agent_id, e); add(cols[1], e.status, e); add(cols[2], e.vendor, e);
+    add(l1, e.agent_id + "\0" + e.status, e); add(l2, e.status + "\0" + e.vendor, e);
+  }
+  const total = entries.reduce((s, e) => s + amt(e), 0);
+  const rank = (s) => { const i = STATUS_ORDER.indexOf(s); return i < 0 ? 2 : i; };
+  const ordered = (col, i) => [...col.entries()].sort((a, b) => i === 1 ? rank(a[0]) - rank(b[0]) : b[1].v - a[1].v);
+  // On a phone the middle labels go above the first outcome and below the last,
+  // so they do not sit on top of the recipients' labels.
+  const top = narrow ? 34 : 20, bottom = narrow ? 24 : 10, pad = 16, nw = 10;
+  const xs = [0, (W - nw) / 2, W - nw];
+  const nodes = cols.map((col, i) => {
+    const list = ordered(col, i), avail = H - top - bottom - pad * (list.length - 1);
+    let y = top;
+    return new Map(list.map(([k, m]) => { const h = Math.max(2, (m.v / total) * avail); const node = { k, ...m, x: xs[i], y, h, col: i }; y += h + pad; return [k, node]; }));
+  });
+  // Recipients take the colour of the outcome that sent them the most.
+  for (const [k, m] of l2) { const [s, v] = k.split("\0"); const d = dominant.get(v); if (!d || m.v > d.v) dominant.set(v, { s, v: m.v }); }
+  const nodeColor = (n) => n.col === 0 ? "var(--accent)" : n.col === 1 ? statusColor(n.k) : statusColor(dominant.get(n.k)?.s);
+  function links(map, from, to, statusOf) {
+    const arr = [...map.entries()].map(([k, m]) => { const [a, b] = k.split("\0"); return { s: from.get(a), t: to.get(b), status: statusOf(a, b), ...m }; });
+    const so = new Map(), ti = new Map();
+    arr.sort((p, q) => p.t.y - q.t.y || p.s.y - q.s.y);
+    for (const L of arr) { L.sh = (L.v / L.s.v) * L.s.h; L.sy = L.s.y + (so.get(L.s) ?? 0); so.set(L.s, (so.get(L.s) ?? 0) + L.sh); }
+    arr.sort((p, q) => p.s.y - q.s.y || p.t.y - q.t.y);
+    for (const L of arr) { L.th = (L.v / L.t.v) * L.t.h; L.ty = L.t.y + (ti.get(L.t) ?? 0); ti.set(L.t, (ti.get(L.t) ?? 0) + L.th); }
+    return arr;
+  }
+  const all = [...links(l1, nodes[0], nodes[1], (a, b) => b), ...links(l2, nodes[1], nodes[2], (a) => a)];
+  const ribbon = (L) => { const x0 = L.s.x + nw, x1 = L.t.x, xm = (x0 + x1) / 2;
+    return `M${x0},${L.sy} C${xm},${L.sy} ${xm},${L.ty} ${x1},${L.ty} L${x1},${L.ty + L.th} C${xm},${L.ty + L.th} ${xm},${L.sy + L.sh} ${x0},${L.sy + L.sh} Z`; };
+  const centre = (L) => { const x0 = L.s.x + nw, x1 = L.t.x, xm = (x0 + x1) / 2, a = L.sy + L.sh / 2, b = L.ty + L.th / 2; return `M${x0},${a} C${xm},${a} ${xm},${b} ${x1},${b}`; };
+  const amount = (v) => v.toFixed(6).replace(/0{1,4}$/, "") + " " + cfg.symbol;
+  const count = (n) => `${n} entr${n === 1 ? "y" : "ies"}`;
+  const linkSvg = all.map((L) => `<path class="link" d="${ribbon(L)}" fill="${statusColor(L.status)}"><title>${esc(L.s.k)} → ${esc(L.status)} → ${esc(L.t.k)}: ${esc(amount(L.v))}, ${count(L.n)}${L.status === "Blocked" ? ", nothing moved" : ""}</title></path>` +
+    `<path class="pulse${L.status === "Paid" ? " moving" : ""}" d="${centre(L)}" stroke="${statusColor(L.status)}"/>`).join("");
+  const short = (k) => narrow ? k.replace(/\.[a-z0-9]+$/i, "") : k;
+  const label = (n) => {
+    if (narrow && n.col === 1) {
+      const list = [...nodes[1].values()], i = list.indexOf(n), cx = n.x + nw / 2;
+      if (i === 0) return `<text x="${cx}" y="${n.y - 6}" text-anchor="middle" font-weight="600">${esc(n.k)}</text>`;
+      if (i === list.length - 1) return `<text x="${cx}" y="${n.y + n.h + 14}" text-anchor="middle" font-weight="600">${esc(n.k)}</text>`;
+      return `<text x="${n.x + nw + 6}" y="${n.y + n.h / 2 + 4}" font-weight="600">${esc(n.k)}</text>`;
+    }
+    const anchor = n.col === 2 ? "end" : "start", x = n.col === 2 ? n.x - 6 : n.x + nw + 6, cy = n.y + n.h / 2;
+    return `<text x="${x}" y="${cy - 2}" text-anchor="${anchor}" font-weight="600">${esc(short(n.k))}</text><text class="sub" x="${x}" y="${cy + 12}" text-anchor="${anchor}">${esc(amount(n.v))} · ${count(n.n)}</text>`;
+  };
+  const nodeSvg = nodes.flatMap((m) => [...m.values()]).map((n) => `<rect x="${n.x}" y="${n.y}" width="${nw}" height="${n.h}" rx="2" fill="${nodeColor(n)}"><title>${esc(n.k)}: ${esc(amount(n.v))}, ${count(n.n)}</title></rect>${label(n)}`).join("");
+  const heads = ["Agent", "Outcome on chain", "Account named"].map((t, i) => `<text class="sub" x="${i === 2 ? W : i === 1 ? xs[1] + nw / 2 : 0}" y="11" text-anchor="${i === 2 ? "end" : i === 1 ? "middle" : "start"}">${t}</text>`).join("");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("height", H);
+  svg.innerHTML = heads + linkSvg + nodeSvg;
+  const blocked = entries.filter((e) => e.status === "Blocked");
+  note.textContent = `${count(entries.length)} in the log, ${amount(total)} asked for in total: ${amount(entries.filter((e) => e.status === "Paid").reduce((s, e) => s + amt(e), 0))} transferred, ${amount(blocked.reduce((s, e) => s + amt(e), 0))} refused across ${count(blocked.length)}. Redraws on every refresh.`;
+}
+let sankeyResize = null;
+addEventListener("resize", () => { clearTimeout(sankeyResize); sankeyResize = setTimeout(() => { if (lastData) renderSankey(lastLog); }, 150); });
+
+function render({ balance, agents, zkAgents, vendors, log, txs, day }) {
+  renderSankey(log);
+  const today = Number(day);
+  const isToday = (e) => Math.floor(ms(e.timestamp) / 86400000) === today;
+  const paid = log.filter((e) => e.status === "Paid");
+  const blocked = log.filter((e) => e.status === "Blocked");
+  const paidToday = paid.filter(isToday).reduce((s, e) => s + BigInt(e.amount), 0n);
   $("t-balance").textContent = money(balance);
   $("t-paid").textContent = money(paidToday);
-  $("t-count").textContent = log.filter((e) => e.status === "Paid").length;
-  $("t-blocked").textContent = log.filter((e) => e.status === "Blocked").length;
+  $("t-paid-s").textContent = `UTC day ${today} · ${paid.filter(isToday).length} payment${paid.filter(isToday).length === 1 ? "" : "s"}`;
+  $("t-count").textContent = paid.length;
+  $("t-blocked").textContent = blocked.length;
+  const zk = zkAgents[0];
+  if (zk) {
+    $("t-breaker").textContent = `${zk.blocked_today} / ${zk.max_blocked_per_day}`;
+    $("t-breaker-s").textContent = zk.frozen ? "frozen: the agent cannot pay today" : `blocked today / limit · ${zk.frozen ? "frozen" : "not frozen"}`;
+  } else if (agents[0]) {
+    $("t-breaker").textContent = `${agents[0].blocked_today ?? 0} / ${agents[0].policy.max_blocked_per_day ?? 0}`;
+  } else {
+    $("t-breaker").textContent = "–";
+  }
 
   const publicAgents = agents.map((a) => {
     const cap = BigInt(a.policy.daily_cap), spent = BigInt(a.spent_today);
     const pct = cap > 0n ? Math.min(100, Number((spent * 100n) / cap)) : 0;
     return `<div class="agent">
-      <div class="row"><span class="mono">${esc(a.agent_id)}</span>${a.policy.frozen ? '<span class="badge Blocked">frozen</span>' : ""}</div>
+      <div class="row"><span>${link("address", a.agent_id)}</span>${a.policy.frozen ? '<span class="badge Blocked">frozen</span>' : ""}</div>
       <div class="bar"><div style="width:${pct}%"></div></div>
       <div class="row sub"><span>${money(spent)} of ${money(cap)} today</span><span>max ${money(a.policy.per_call_max)} per call · ${Number(a.blocked_today ?? 0)}/${Number(a.policy.max_blocked_per_day ?? 0)} blocked today</span></div>
     </div>`;
   });
-  const privateAgents = zkAgents.map((a) => `<div class="agent">
-      <div class="row"><span class="mono">${esc(a.agent_id)}</span><span>
-        <span class="badge Private">private policy</span>${a.frozen ? ' <span class="badge Blocked">frozen</span>' : ""}</span></div>
+  const privateAgents = zkAgents.map((a) => {
+    const pct = a.max_blocked_per_day > 0 ? Math.min(100, Math.round(100 * a.blocked_today / a.max_blocked_per_day)) : 0;
+    return `<div class="agent">
+      <div class="row"><span>${link("address", a.agent_id)}</span><span>
+        <span class="badge Private">private policy</span>${a.frozen ? ' <span class="badge Blocked">frozen</span>' : ""}${a.pending_log_id != null ? ` <span class="badge Pending">transfer in flight (#${a.pending_log_id})</span>` : ""}</span></div>
       <div class="sub">Limits: not on chain. Each payment carries a proof that it obeys them.</div>
       <div class="sub">Policy commitment <span class="mono">${esc(shortHash(a.policy_commitment))}</span> · spending state <span class="mono">${esc(shortHash(a.state_commitment))}</span></div>
-      <div class="sub">${Number(a.blocked_today)}/${Number(a.max_blocked_per_day)} blocked today</div>
-    </div>`);
+      <div class="bar${a.blocked_today >= a.max_blocked_per_day ? " warn" : ""}"><div style="width:${pct}%"></div></div>
+      <div class="row sub"><span>Circuit breaker: ${a.blocked_today} of ${a.max_blocked_per_day} blocked attempts today</span><span>freezes at the limit, resets at UTC midnight</span></div>
+    </div>`;
+  });
   $("agents").innerHTML = [...privateAgents, ...publicAgents].join("") || '<div class="sub">No agents registered.</div>';
 
   // With a private policy the allowlist is not on chain, so this page can only
   // show who has already been paid, which token transfers make public anyway.
   const isPrivate = zkAgents.length > 0;
-  const paidVendors = [...new Set(log.filter((e) => e.status === "Paid").map((e) => e.vendor))];
+  const paidVendors = [...new Set(paid.map((e) => e.vendor))];
   const shown = isPrivate ? [...new Set([...vendors, ...paidVendors])] : vendors;
   $("vendors-title").textContent = isPrivate ? "Vendors paid so far" : "Approved vendors";
   $("vendors-note").textContent = isPrivate
     ? "The allowlist is private. A vendor appears here only once it has been paid, because token transfers are public."
     : "";
-  $("vendors").innerHTML = shown.map((v) => `<span class="chip mono">${esc(v)}</span>`).join("") || '<span class="sub">None yet.</span>';
+  $("vendors").innerHTML = shown.map((v) => `<span class="chip">${link("address", v)}</span>`).join("") || '<span class="sub">None yet.</span>';
   $("privacy").hidden = !isPrivate;
 
-  const txByLog = new Map(txs.map((t) => [t.log_id, t.tx_hash]));
-  $("log").innerHTML = log.slice().reverse().map((e) => {
+  const txByLog = new Map(txs.map((t) => [t.log_id, t]));
+  const rows = log.slice().reverse().filter((e) => filter === "all" || (filter === "other" ? !["Paid", "Blocked"].includes(e.status) : e.status === filter));
+  $("log").innerHTML = rows.map((e) => {
     const tx = txByLog.get(e.id);
+    const why = reasonWhy(e.reason);
     return `<tr class="row-${e.status}">
-      <td class="mono">${e.id}</td><td>${time(e.timestamp)}</td>
-      <td class="mono">${esc(e.agent_id)}</td><td class="mono">${esc(e.vendor)}</td>
+      <td class="mono">${e.id}</td><td class="mono">${utc(e.timestamp)}</td>
+      <td>${link("address", e.agent_id)}</td><td>${link("address", e.vendor)}</td>
       <td class="num">${money(e.amount)}</td>
-      <td><span class="badge ${e.status}">${e.status}</span></td>
-      <td>${e.reason ? `<span class="reason">${esc(e.reason)}</span>` : e.settled_at ? `settled at block ${e.settled_at}` : ""}</td>
-      <td class="mono" title="${esc(tx ?? "")}">${tx ? esc(shortHash(tx)) : ""}</td>
+      <td><span class="badge ${esc(e.status)}">${esc(e.status)}</span></td>
+      <td>${e.reason ? `<span class="reason">${esc(e.reason)}</span>` : e.settled_at ? `settled at block ${e.settled_at}` : ""}${why ? `<span class="why">${esc(why)}</span>` : ""}</td>
+      <td class="mono" title="${esc(e.memo ?? "")}">${esc(shortHash(e.memo ?? ""))}</td>
+      <td>${tx ? link("txns", tx.tx_hash, shortHash(tx.tx_hash)) : '<span class="sub">not listed</span>'}</td>
     </tr>`;
-  }).join("") || '<tr><td colspan="8" class="sub">No payments yet.</td></tr>';
+  }).join("") || `<tr><td colspan="9" class="sub">${log.length ? "Nothing matches this filter." : "No payments yet."}</td></tr>`;
+  $("log-note").textContent = txs.length
+    ? "The contract's log does not store transaction hashes. Hashes come from the recorded runs; a row without one can be found on the explorer under the agent's account."
+    : "The contract's log does not store transaction hashes. Find each call on the explorer under the agent's account.";
+
+  const rec = txs.filter((t) => t.note);
+  $("recorded").innerHTML = rec.length
+    ? rec.map((t) => `<li>#${t.log_id} ${esc(t.note)}: ${link("txns", t.tx_hash, shortHash(t.tx_hash))}</li>`).join("")
+    : '<li class="sub">None listed for this run.</li>';
 }
 
+function renderStatic() {
+  $("policy").textContent = cfg.policy || "(set ?policy=)";
+  $("policy-link").href = explorer("address", cfg.policy) ?? "#";
+  $("network").textContent = cfg.network;
+  showRpc();
+  const ex = [];
+  if (cfg.explorer) {
+    ex.push(`<li>Policy contract ${link("address", cfg.policy)}</li>`);
+    if (cfg.agent) ex.push(`<li>Agent account and its single key ${link("address", cfg.agent)}</li>`);
+    if (cfg.token) ex.push(`<li>Token ${link("address", cfg.token)}</li>`);
+    $("explorer-links").innerHTML = ex.join("");
+  }
+  $("repo-line").innerHTML = cfg.repo ? `Source, tests and the full write-up: <a href="${esc(cfg.repo)}" target="_blank" rel="noopener">${esc(cfg.repo.replace(/^https?:\/\//, ""))}</a>` : "";
+  initTry();
+}
+
+// "Try it": the contract's view methods, each with example arguments.
+const VIEW_METHODS = [
+  ["get_balance", {}], ["get_log_length", {}], ["get_log", { from_index: 0, limit: 10 }],
+  ["get_agents", {}], ["get_zk_agents", {}], ["get_vendors", {}],
+  ["get_owner", {}], ["get_token_id", {}], ["get_day", {}], ["get_zk_verifying_key", {}],
+];
+function tryArgs() { return JSON.parse($("q-args").value.trim() || "{}"); }
+function renderCurl() {
+  let args;
+  try { args = tryArgs(); } catch { $("q-curl").textContent = "Arguments must be JSON."; return; }
+  const params = { request_type: "call_function", finality: "final", account_id: cfg.policy, method_name: $("q-method").value, args_base64: btoa(JSON.stringify(args)) };
+  const body = JSON.stringify({ jsonrpc: "2.0", id: "1", method: "query", params });
+  $("q-curl").textContent = `curl -s ${cfg.rpc} -H 'content-type: application/json' -d '${body}'`;
+}
+async function runTry() {
+  const out = $("q-out");
+  out.classList.remove("err");
+  let args;
+  try { args = tryArgs(); } catch { out.textContent = "Arguments must be JSON, for example {} or {\"from_index\":0,\"limit\":10}."; out.classList.add("err"); return; }
+  out.textContent = "…";
+  try {
+    const t = performance.now();
+    const r = await rpc({ request_type: "call_function", account_id: cfg.policy, method_name: $("q-method").value, args_base64: btoa(JSON.stringify(args)) });
+    const raw = new TextDecoder().decode(new Uint8Array(r.result));
+    let text = JSON.stringify(JSON.parse(raw), null, 2);
+    // Timestamps are nanoseconds, above 2^53: JavaScript rounds them, the raw bytes do not.
+    if (/\d{16,}/.test(raw)) text += "\n\n// integers above 2^53 are rounded above; exact raw bytes:\n" + raw;
+    out.textContent = text + `\n\n// ${Math.round(performance.now() - t)} ms, block ${r.block_height}, read at final`;
+  } catch (err) {
+    out.textContent = "The contract refused the call: " + err.message;
+    out.classList.add("err");
+  }
+}
+function initTry() {
+  const sel = $("q-method");
+  sel.innerHTML = VIEW_METHODS.map(([m]) => `<option value="${m}">${m}</option>`).join("");
+  const setDefault = () => { $("q-args").value = JSON.stringify(VIEW_METHODS.find(([m]) => m === sel.value)[1]); renderCurl(); };
+  sel.addEventListener("change", setDefault);
+  $("q-args").addEventListener("input", renderCurl);
+  $("q-run").addEventListener("click", runTry);
+  $("q-args").addEventListener("keydown", (e) => { if (e.key === "Enter") runTry(); });
+  setDefault();
+}
+
+// Public RPCs allow only so many requests per minute per IP, and a judge may
+// leave this tab open for an hour. So each refresh reads four things that can
+// change at any time; the deployment checks, the agent and vendor lists are
+// re-read once a minute, and the log only when its length changed.
+let slow = null, slowAt = 0, lastLogLen = -1;
 async function refresh() {
   try {
-    const [balance, agents, zkAgents, vendors, log, txs] = await Promise.all([
-      view("get_balance"), view("get_agents"), view("get_zk_agents").catch(() => []), view("get_vendors"), allLog(),
-      fetch("transactions.json").then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    const now = Date.now();
+    if (!slow || now - slowAt > 60000) {
+      const [account, policyKeys, agentKeys, owner, token, vk, agents, vendors] = await Promise.all([
+        viewAccount(cfg.policy), viewKeys(cfg.policy),
+        cfg.agent ? viewKeys(cfg.agent).catch(() => null) : null,
+        view("get_owner"), view("get_token_id"), view("get_zk_verifying_key").catch(() => null),
+        view("get_agents"), view("get_vendors"),
+      ]);
+      slow = { account, policyKeys, agentKeys, owner, token, vk, agents, vendors };
+      slowAt = now;
+      renderChecks(slow);
+    }
+    const [balance, zkAgents, logLen, day] = await Promise.all([
+      view("get_balance"), view("get_zk_agents").catch(() => []), view("get_log_length"), view("get_day"),
     ]);
+    let { log, txs } = lastData ?? {};
+    if (logLen !== lastLogLen) {
+      [log, txs] = await Promise.all([
+        logUpTo(logLen),
+        fetch("transactions.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+      ]);
+      lastLogLen = logLen;
+    }
     lastLog = log;
-    render(balance, agents, zkAgents, vendors, log, txs);
-    $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+    lastData = { balance, agents: slow.agents, zkAgents, vendors: slow.vendors, log, txs, day };
+    render(lastData);
+    $("updated").textContent = "Read " + new Date().toLocaleTimeString();
     $("updated").classList.remove("err");
   } catch (err) {
     $("updated").textContent = "RPC error: " + err.message;
@@ -233,7 +709,7 @@ async function refresh() {
 }
 
 function exportCsv() {
-  const cols = ["id", "timestamp_utc", "agent_id", "vendor", "amount_usdc", "status", "reason", "memo", "settled_at_block"];
+  const cols = ["id", "timestamp_utc", "agent_id", "vendor", "amount", "status", "reason", "memo", "settled_at_block"];
   // Memos are written by agents. A leading = + - @ tab or CR would make a
   // spreadsheet run the cell as a formula, so prefix those with a quote.
   const cell = (v) => {
@@ -241,7 +717,7 @@ function exportCsv() {
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const rows = lastLog.map((e) => [e.id, new Date(Number(BigInt(e.timestamp) / 1000000n)).toISOString(), e.agent_id, e.vendor,
+  const rows = lastLog.map((e) => [e.id, new Date(ms(e.timestamp)).toISOString(), e.agent_id, e.vendor,
     (Number(BigInt(e.amount)) / 1e6).toFixed(6), e.status, e.reason, e.memo, e.settled_at].map(cell).join(","));
   const blob = new Blob([[cols.join(","), ...rows].join("\n")], { type: "text/csv" });
   const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `nearx402-audit-${cfg.policy}.csv` });
@@ -249,19 +725,39 @@ function exportCsv() {
   URL.revokeObjectURL(a.href);
 }
 
+function setAuto(on) {
+  clearInterval(timer);
+  timer = on ? setInterval(() => { if (!document.hidden) refresh(); }, 10000) : null;
+  $("auto").setAttribute("aria-pressed", String(on));
+  $("auto").textContent = on ? "Auto-refresh on" : "Auto-refresh off";
+}
+
 (async () => {
   const params = new URLSearchParams(location.search);
-  try { cfg = await (await fetch("config.json")).json(); } catch { cfg = {}; }
-  cfg.rpc = params.get("rpc") || cfg.rpc || "https://rpc.testnet.near.org";
+  try { cfg = await (await fetch("config.json", { cache: "no-store" })).json(); } catch { cfg = {}; }
+  const configuredPolicy = cfg.policy;
+  if (params.get("rpc")) cfg.rpc_fallback = null; // an explicit RPC is used alone
+  cfg.rpc = params.get("rpc") || cfg.rpc || "https://near-testnet.drpc.org";
   cfg.policy = params.get("policy") || cfg.policy;
   cfg.network = params.get("network") || cfg.network || "testnet";
   cfg.symbol = params.get("symbol") || cfg.symbol || "USDC";
-  $("policy").textContent = cfg.policy || "(set ?policy=)";
-  $("network").textContent = cfg.network;
+  cfg.agent = params.get("agent") || cfg.agent || null;
+  // Expected values apply to the configured contract only: an override points
+  // at another deployment, whose build and token this page cannot know.
+  if (cfg.policy !== configuredPolicy) { cfg.expected_code_hash = null; cfg.token = null; cfg.agent = params.get("agent") || null; }
+  renderStatic();
   $("csv").addEventListener("click", exportCsv);
+  $("refresh").addEventListener("click", refresh);
+  $("auto").addEventListener("click", () => setAuto(!timer));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && timer) refresh(); });
+  document.querySelectorAll(".filters [data-f]").forEach((b) => b.addEventListener("click", () => {
+    filter = b.dataset.f;
+    document.querySelectorAll(".filters [data-f]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    if (lastData) render(lastData);
+  }));
   if (!cfg.policy) { $("updated").textContent = "Add ?policy=<contract id> to the URL."; return; }
   await refresh();
-  setInterval(refresh, 3000);
+  setAuto(true);
 })();
 </script>
 </body>

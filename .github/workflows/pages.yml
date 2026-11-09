@@ -7,7 +7,7 @@ name: dashboard-pages
 on:
   push:
     branches: [main]
-    paths: [dashboard/**, .github/workflows/pages.yml]
+    paths: [dashboard/**, docs/**, README.md, scripts/build-docs.py, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Render the docs pages from the markdown
+        run: python3 scripts/build-docs.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
